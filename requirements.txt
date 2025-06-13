@@ -1,1 +1,4 @@
 pytest>=6.0.0
+requests
+openpyxl
+python-docx

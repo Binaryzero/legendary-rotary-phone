@@ -7,6 +7,10 @@ from typing import Optional
 import requests
 from docx import Document
 from openpyxl import Workbook
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openpyxl.worksheet.worksheet import Worksheet
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
@@ -177,7 +181,7 @@ def main(input_file: Path = Path("cves.txt")) -> None:
         return
     cve_ids = [line.strip() for line in input_file.read_text().splitlines() if line.strip()]
     wb = Workbook()
-    ws = wb.active
+    ws = wb.active if wb.active is not None else wb.create_sheet()
     ws.title = f"Batch_{datetime.now().strftime('%Y%m%d_%H%M')}"
     ws.append([
         "CVE ID",
