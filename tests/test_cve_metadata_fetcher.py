@@ -15,7 +15,7 @@ sys.modules.setdefault("openpyxl", types.SimpleNamespace(Workbook=lambda *a, **k
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cve_metadata_fetcher import CveMetadata, fetch_cve, parse_cve
+from cve_metadata_fetcher import CveMetadata, fetch_cve, parse_cve, main
 
 
 SAMPLE_JSON = {
@@ -29,12 +29,29 @@ SAMPLE_JSON = {
             "references": [
                 {"url": "https://exploit-db.com/exploits/1"},
                 {"url": "https://example.com/patch", "tags": ["upgrade"]},
-                {"url": "https://vendor.com/advisories/123"},
+        {"url": "https://vendor.com/advisories/123"},
             ],
             "affected": [
                 {"vendor": "Acme", "product": "App", "versions": [{"version": "1.0"}]}
             ],
         }
+    }
+}
+
+NESTED_JSON = {
+    "containers": {
+        "adp": [
+            {
+                "metrics": [
+                    {"other": {"type": "rating"}},
+                    {"cvssV3_1": {"baseScore": 8.8, "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}}
+                ],
+                "problemTypes": [
+                    {"descriptions": [{"cweId": "CWE-123", "description": "Sample CWE description"}]}
+                ]
+            }
+        ],
+        "cna": {}
     }
 }
 
@@ -62,4 +79,51 @@ def test_fetch_cve_invalid_format_ignored():
     with patch("cve_metadata_fetcher.requests.get") as mock_get:
         assert fetch_cve("BADFORMAT") is None
         mock_get.assert_not_called()
+
+
+def test_parse_cve_handles_nested_metrics_and_cwe():
+    parsed = parse_cve(NESTED_JSON)
+    assert parsed.cvss == 8.8
+    assert parsed.vector == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    assert parsed.cwe == "CWE-123 Sample CWE description"
+
+
+class DummySheet:
+    def __init__(self):
+        self.rows = []
+        self.title = ""
+
+    def append(self, row):
+        self.rows.append(row)
+
+
+class DummyWorkbook:
+    def __init__(self):
+        self.active = DummySheet()
+        self.saved = None
+
+    def create_sheet(self):
+        self.active = DummySheet()
+        return self.active
+
+    def save(self, path):
+        self.saved = path
+
+
+def test_main_allows_skipping_reports(tmp_path):
+    input_file = tmp_path / "cves.txt"
+    input_file.write_text("CVE-1234-0001\n")
+    wb = DummyWorkbook()
+    with patch("cve_metadata_fetcher.fetch_cve", return_value=SAMPLE_JSON), patch(
+        "cve_metadata_fetcher.Workbook", return_value=wb
+    ), patch("cve_metadata_fetcher.create_report") as mock_report:
+        main(
+            input_file,
+            output_file=tmp_path / "out.xlsx",
+            reports_dir=tmp_path,
+            generate_reports=False,
+        )
+        assert not mock_report.called
+        assert wb.saved == str(tmp_path / "out.xlsx")
+        assert wb.active.rows
 
