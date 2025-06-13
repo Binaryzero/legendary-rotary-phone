@@ -4,7 +4,7 @@ import pytest
 
 import sys
 from pathlib import Path
-
+import importlib
 import types
 
 class DummyParagraph:
@@ -82,9 +82,6 @@ class DummyWorkbook:
 
 
 class DummySession:
-    def __init__(self):
-        pass
-
     def get(self, *a, **k):
         return types.SimpleNamespace(json=lambda: {}, raise_for_status=lambda: None)
 
@@ -97,29 +94,38 @@ class DummySession:
     def __exit__(self, exc_type, exc, tb):
         self.close()
 
-sys.modules.setdefault(
-    "requests",
-    types.SimpleNamespace(
-        RequestException=Exception,
-        get=lambda *a, **k: None,
-        Session=DummySession,
-    ),
-)
-sys.modules.setdefault("docx", types.SimpleNamespace(Document=DummyDocument))
-sys.modules.setdefault(
-    "openpyxl",
-    types.SimpleNamespace(
-        Workbook=DummyWorkbook,
-    ),
-)
-sys.modules.setdefault("openpyxl.styles", types.SimpleNamespace(Font=lambda *a, **k: None))
-sys.modules.setdefault("openpyxl.utils", types.SimpleNamespace(get_column_letter=lambda i: chr(64 + i)))
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+class DummyFont:
+    pass
 
-import os
 
-from cve_metadata_fetcher import CveMetadata, create_report, fetch_cve, parse_cve, main
+@pytest.fixture
+def fetcher(monkeypatch):
+    """Import ``cve_metadata_fetcher`` with stubbed external modules."""
+    req = types.ModuleType("requests")
+    req.RequestException = Exception
+    req.Session = DummySession
+
+    docx_mod = types.ModuleType("docx")
+    docx_mod.Document = DummyDocument
+
+    openpyxl_mod = types.ModuleType("openpyxl")
+    openpyxl_mod.Workbook = DummyWorkbook
+    styles_mod = types.ModuleType("openpyxl.styles")
+    styles_mod.Font = lambda *a, **k: DummyFont()
+    utils_mod = types.ModuleType("openpyxl.utils")
+    utils_mod.get_column_letter = lambda i: chr(64 + i)
+
+    monkeypatch.setitem(sys.modules, "requests", req)
+    monkeypatch.setitem(sys.modules, "docx", docx_mod)
+    monkeypatch.setitem(sys.modules, "openpyxl", openpyxl_mod)
+    monkeypatch.setitem(sys.modules, "openpyxl.styles", styles_mod)
+    monkeypatch.setitem(sys.modules, "openpyxl.utils", utils_mod)
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+
+    module = importlib.import_module("cve_metadata_fetcher")
+    importlib.reload(module)
+    return module
 
 
 SAMPLE_JSON = {
@@ -143,9 +149,9 @@ SAMPLE_JSON = {
 }
 
 
-def test_parse_cve_extracts_fields():
-    parsed = parse_cve(SAMPLE_JSON)
-    assert isinstance(parsed, CveMetadata)
+def test_parse_cve_extracts_fields(fetcher):
+    parsed = fetcher.parse_cve(SAMPLE_JSON)
+    assert isinstance(parsed, fetcher.CveMetadata)
     assert parsed.description == "Sample description"
     assert parsed.cvss == "5.0"
     assert parsed.vector == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N"
@@ -157,7 +163,7 @@ def test_parse_cve_extracts_fields():
     assert parsed.affected == "Acme App 1.0"
 
 
-def test_parse_cve_handles_missing_lists():
+def test_parse_cve_handles_missing_lists(fetcher):
     empty_lists = {
         "containers": {
             "cna": {
@@ -169,47 +175,66 @@ def test_parse_cve_handles_missing_lists():
             }
         }
     }
-    parsed = parse_cve(empty_lists)
+    parsed = fetcher.parse_cve(empty_lists)
     assert parsed.description == ""
     assert parsed.cvss == ""
     assert parsed.vector == ""
     assert parsed.cwe == ""
 
 
-def test_fetch_cve_returns_none_on_failure():
+def test_fetch_cve_returns_none_on_failure(fetcher):
     with patch("cve_metadata_fetcher.requests.Session") as mock_session:
         mock_instance = mock_session.return_value
         mock_instance.get.side_effect = Exception("fail")
-        assert fetch_cve("CVE-0000-0000") is None
+        assert fetcher.fetch_cve("CVE-0000-0000") is None
 
-def test_fetch_cve_invalid_format_ignored():
+def test_fetch_cve_invalid_format_ignored(fetcher):
     with patch("cve_metadata_fetcher.requests.Session") as mock_session:
-        assert fetch_cve("BADFORMAT") is None
+        assert fetcher.fetch_cve("BADFORMAT") is None
         mock_session.assert_not_called()
 
 
-def test_create_report_runs(tmp_path, monkeypatch):
+def test_create_report_runs(fetcher, tmp_path, monkeypatch):
     template = tmp_path / "CVE_Report_Template.docx"
     template.write_text("dummy")
     monkeypatch.chdir(tmp_path)
 
     dummy = DummyDocument()
-    monkeypatch.setattr('cve_metadata_fetcher.Document', lambda *_: dummy)
+    monkeypatch.setattr(fetcher, 'Document', lambda *_: dummy)
 
-    meta = CveMetadata(description="desc")
-    create_report("CVE-0000-0001", meta, template, Path("."))
+    meta = fetcher.CveMetadata(
+        description="desc",
+        affected="aff",
+        cvss="5.0",
+        vector="v",
+        cwe="CWE-1",
+        exploit="Yes",
+        exploit_refs="ref",
+        fix_version="fix",
+        mitigations="mit",
+        references="ref2",
+    )
+    fetcher.create_report("CVE-0000-0001", meta, template, Path("."))
     assert hasattr(dummy, "saved")
     assert dummy.saved.name == "CVE-0000-0001.docx"
+    assert dummy.paragraphs[0].text == "CVE ID: CVE-0000-0001"
+    assert dummy.paragraphs[1].text == meta.description
+    assert dummy.paragraphs[2].text == meta.affected
+    exp_txt = (
+        f"CVSS: {meta.cvss} ({meta.vector})\n"
+        f"CWE: {meta.cwe}\n"
+        f"Exploit Available: {meta.exploit} {meta.exploit_refs}"
+    )
+    assert dummy.paragraphs[3].text == exp_txt
+    assert dummy.paragraphs[4].text == f"Fix: {meta.fix_version}\nMitigations: {meta.mitigations}"
+    assert dummy.paragraphs[5].text == meta.references
 
 
-def test_main_skip_docs(monkeypatch, tmp_path):
+def test_main_skip_docs(fetcher, monkeypatch, tmp_path):
     input_file = tmp_path / "cves.txt"
     input_file.write_text("CVE-1111-2222")
 
-    monkeypatch.setattr(
-        'cve_metadata_fetcher.fetch_cve',
-        lambda *_: SAMPLE_JSON,
-    )
+    monkeypatch.setattr(fetcher, 'fetch_cve', lambda *_: SAMPLE_JSON)
 
     called = False
 
@@ -217,9 +242,9 @@ def test_main_skip_docs(monkeypatch, tmp_path):
         nonlocal called
         called = True
 
-    monkeypatch.setattr('cve_metadata_fetcher.create_report', fake_report)
+    monkeypatch.setattr(fetcher, 'create_report', fake_report)
 
-    main(
+    fetcher.main(
         input_file,
         excel_out=tmp_path / "out.xlsx",
         template_path=tmp_path / "template.docx",

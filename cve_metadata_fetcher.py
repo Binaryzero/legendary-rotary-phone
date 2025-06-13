@@ -179,6 +179,15 @@ def create_report(cve_id: str, meta: CveMetadata, template_path: Path, output_di
     output_dir.mkdir(exist_ok=True)
     doc.save(output_dir / f"{cve_id}.docx")
 
+def iter_cve_ids(file_path: Path):
+    """Yield CVE IDs from ``file_path`` one per line."""
+    with file_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if stripped:
+                yield stripped
+
+
 def main(
     input_file: Path = Path("cves.txt"),
     excel_out: Path = Path("CVE_Results.xlsx"),
@@ -190,7 +199,6 @@ def main(
     if not input_file.exists():
         logging.error("Missing %s input file.", input_file)
         return
-    cve_ids = [line.strip() for line in input_file.read_text().splitlines() if line.strip()]
     wb = Workbook()
     ws = wb.active
     ws.title = f"Batch_{datetime.now().strftime('%Y%m%d_%H%M')}"
@@ -213,7 +221,7 @@ def main(
         cell.font = Font(bold=True)
 
     with requests.Session() as session:
-        for cve_id in cve_ids:
+        for cve_id in iter_cve_ids(input_file):
             logging.info("Processing %s", cve_id)
             data = fetch_cve(cve_id, session)
             if not data:
