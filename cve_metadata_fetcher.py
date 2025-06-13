@@ -69,9 +69,10 @@ def main():
     args = parser.parse_args()
 
     input_path = Path(args.input)
+    output_path = Path(args.output)
     if not input_path.exists():
-        logging.error(f"Missing {input_path.resolve()} input file.")
-        return
+    wb.save(output_path)
+    logging.info(f"{output_path} created.")
     cve_ids = [line.strip() for line in input_path.read_text().splitlines() if line.strip()]
     wb = Workbook()
     ws = wb.active
