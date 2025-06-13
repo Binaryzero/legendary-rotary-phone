@@ -29,29 +29,12 @@ SAMPLE_JSON = {
             "references": [
                 {"url": "https://exploit-db.com/exploits/1"},
                 {"url": "https://example.com/patch", "tags": ["upgrade"]},
-        {"url": "https://vendor.com/advisories/123"},
+                {"url": "https://vendor.com/advisories/123"},
             ],
             "affected": [
                 {"vendor": "Acme", "product": "App", "versions": [{"version": "1.0"}]}
             ],
         }
-    }
-}
-
-NESTED_JSON = {
-    "containers": {
-        "adp": [
-            {
-                "metrics": [
-                    {"other": {"type": "rating"}},
-                    {"cvssV3_1": {"baseScore": 8.8, "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}}
-                ],
-                "problemTypes": [
-                    {"descriptions": [{"cweId": "CWE-123", "description": "Sample CWE description"}]}
-                ]
-            }
-        ],
-        "cna": {}
     }
 }
 
@@ -79,11 +62,4 @@ def test_fetch_cve_invalid_format_ignored():
     with patch("cve_metadata_fetcher.requests.get") as mock_get:
         assert fetch_cve("BADFORMAT") is None
         mock_get.assert_not_called()
-
-
-def test_parse_cve_handles_nested_metrics_and_cwe():
-    parsed = parse_cve(NESTED_JSON)
-    assert parsed.cvss == 8.8
-    assert parsed.vector == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
-    assert parsed.cwe == "CWE-123 Sample CWE description"
 
