@@ -27,6 +27,14 @@ python cve_metadata_fetcher.py
 3. Open `CVE_Results.xlsx` for the research summary
 4. Use `CVE_Report_Template.docx` for any deep-dive documentation
 
+## Testing
+This project uses `pytest` to run the unit tests located in the `tests/`
+directory. After installing the dependencies, simply run:
+
+```
+pytest
+```
+
 ## Notes
 - This kit is **not** intended for remediation prioritization
 - It is intended for full-spectrum documentation of vulnerabilities — including technical risk, mitigation references, and system impact
