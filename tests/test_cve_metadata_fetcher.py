@@ -57,3 +57,9 @@ def test_fetch_cve_returns_none_on_failure():
     with patch("cve_metadata_fetcher.requests.get") as mock_get:
         mock_get.side_effect = Exception("fail")
         assert fetch_cve("CVE-0000-0000") is None
+
+def test_fetch_cve_invalid_format_ignored():
+    with patch("cve_metadata_fetcher.requests.get") as mock_get:
+        assert fetch_cve("BADFORMAT") is None
+        mock_get.assert_not_called()
+

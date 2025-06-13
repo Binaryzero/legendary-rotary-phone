@@ -42,8 +42,25 @@ def fetch_cve(cve_id: str) -> Optional[dict]:
         Parsed JSON content if found, otherwise ``None`` when the request fails.
     """
 
-    year = cve_id.split("-")[1]
-    bucket = int(cve_id.split("-")[2]) // 1000
+    try:
+        parts = cve_id.split("-")
+        if len(parts) < 3:
+            logging.warning("Invalid CVE ID format: %s", cve_id)
+            return None
+        year = parts[1]
+        if not (year.isdigit() and len(year) == 4):
+            logging.warning("Invalid year in CVE ID: %s", cve_id)
+            return None
+
+        bucket_str = parts[2]
+        if not bucket_str.isdigit():
+            logging.warning("Invalid numeric part in CVE ID: %s", cve_id)
+            return None
+        bucket = int(bucket_str) // 1000
+    except IndexError:
+        logging.warning("Invalid CVE ID format: %s", cve_id)
+        return None
+
     url = f"{MITRE_BASE}/{year}/{bucket}xxx/{cve_id}.json"
     try:
         response = requests.get(url, timeout=10)
