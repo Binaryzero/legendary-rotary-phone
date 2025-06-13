@@ -1,7 +1,11 @@
-import json, requests, logging
-from openpyxl import Workbook
+import json
+import logging
 from datetime import datetime
 from pathlib import Path
+
+import requests
+from docx import Document
+from openpyxl import Workbook
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
@@ -41,21 +45,32 @@ def parse_cve(cve_json):
     desc = cna.get("descriptions", [{}])[0].get("value", "")
     cvss = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("baseScore", "")
     vector = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("vectorString", "")
-    cwe = ", ".join(
-        i["description"][0]["value"]
-        for i in cna.get("problemTypes", [{}])[0].get("descriptions", [])
-    ) if cna.get("problemTypes") else ""
+    cwe_items = []
+    for pt in cna.get("problemTypes", []):
+        for desc_entry in pt.get("descriptions", []):
+            val = desc_entry.get("description") or desc_entry.get("value")
+            if val:
+                cwe_items.append(val)
+    cwe = ", ".join(cwe_items)
     references = cna.get("references", [])
     exploits = [r["url"] for r in references if "exploit-db.com" in r["url"] or "github.com" in r["url"]]
     exploit_flag = "Yes" if exploits else "No"
     fix_version = ""
     mitigations = []
+    affected = []
     for r in references:
         url = r.get("url", "")
         if "advisories" in url or "bulletin" in url:
             mitigations.append(url)
         if "upgrade" in r.get("tags", []):
             fix_version = r.get("url", "")
+    for a in cna.get("affected", []):
+        vendor = a.get("vendor", "")
+        product = a.get("product", "")
+        versions = ", ".join(v.get("version", "") for v in a.get("versions", []))
+        item = " ".join(i for i in [vendor, product, versions] if i)
+        if item:
+            affected.append(item)
     return {
         "Description": desc,
         "CVSS": cvss,
@@ -64,8 +79,54 @@ def parse_cve(cve_json):
         "Exploit": exploit_flag,
         "ExploitRefs": ", ".join(exploits),
         "FixVersion": fix_version,
-        "Mitigations": ", ".join(mitigations)
+        "Mitigations": ", ".join(mitigations),
+        "Affected": "; ".join(affected),
+        "References": ", ".join(r.get("url", "") for r in references)
     }
+
+
+def create_report(cve_id: str, meta: dict) -> None:
+    """Generate a Word report based on the template.
+
+    Parameters
+    ----------
+    cve_id: str
+        Identifier for the CVE.
+    meta: dict
+        Parsed metadata dictionary returned by :func:`parse_cve`.
+    """
+    template = Path("CVE_Report_Template.docx")
+    if not template.exists():
+        logging.error("CVE_Report_Template.docx not found")
+        return
+    doc = Document(template)
+
+    for p in doc.paragraphs:
+        txt = p.text.strip()
+        if txt.startswith("CVE ID:"):
+            p.text = f"CVE ID: {cve_id}"
+        elif txt == "Brief summary of the vulnerability.":
+            p.text = meta.get("Description", "")
+        elif txt == "List of affected products or environments.":
+            p.text = meta.get("Affected", "")
+        elif txt.startswith("Describe exploit vectors"):
+            exp = f"CVSS: {meta.get('CVSS')} ({meta.get('Vector')})\n" \
+                  f"CWE: {meta.get('CWE')}\n" \
+                  f"Exploit Available: {meta.get('Exploit')} {meta.get('ExploitRefs')}"
+            p.text = exp
+        elif txt.startswith("Document any known fixes"):
+            mitigations = []
+            if meta.get("FixVersion"):
+                mitigations.append(f"Fix: {meta['FixVersion']}")
+            if meta.get("Mitigations"):
+                mitigations.append(f"Mitigations: {meta['Mitigations']}")
+            p.text = "\n".join(mitigations)
+        elif txt.startswith("List external references"):
+            p.text = meta.get("References", "")
+
+    out_dir = Path("reports")
+    out_dir.mkdir(exist_ok=True)
+    doc.save(out_dir / f"{cve_id}.docx")
 
 def main():
     """Read CVE IDs, fetch their metadata and save results to Excel."""
@@ -84,6 +145,7 @@ def main():
             continue
         parsed = parse_cve(data)
         ws.append([cve_id] + [parsed.get(k, "") for k in ["Description", "CVSS", "Vector", "CWE", "Exploit", "ExploitRefs", "FixVersion", "Mitigations"]])
+        create_report(cve_id, parsed)
     wb.save("CVE_Results.xlsx")
     logging.info("CVE_Results.xlsx created.")
 
