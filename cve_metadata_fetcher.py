@@ -7,6 +7,10 @@ from typing import Optional
 import requests
 from docx import Document
 from openpyxl import Workbook
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openpyxl.worksheet.worksheet import Worksheet
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
@@ -81,16 +85,39 @@ def parse_cve(cve_json: dict) -> CveMetadata:
     CveMetadata
         Structured metadata extracted from the CVE document.
     """
-    cna = cve_json.get("containers", {}).get("cna", {})
+    containers = cve_json.get("containers", {})
+    cna = containers.get("cna", {})
     desc = cna.get("descriptions", [{}])[0].get("value", "")
-    cvss = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("baseScore", "")
-    vector = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("vectorString", "")
+
+    def find_cvss() -> tuple[str, str]:
+        """Search available containers for a CVSS score and vector."""
+        order = list(containers.get("adp", [])) + [cna]
+        for cont in order:
+            if not cont:
+                continue
+            for metric in cont.get("metrics", []):
+                for key in ("cvssV3_1", "cvssV3_0", "cvssV2_1", "cvssV2_0", "cvssV2"):
+                    data = metric.get(key)
+                    if data:
+                        return data.get("baseScore", ""), data.get("vectorString", "")
+        return "", ""
+
+    cvss, vector = find_cvss()
+
     cwe_items = []
-    for pt in cna.get("problemTypes", []):
-        for desc_entry in pt.get("descriptions", []):
-            val = desc_entry.get("description") or desc_entry.get("value")
-            if val:
-                cwe_items.append(val)
+    for container in [cna] + list(containers.get("adp", [])):
+        for pt in container.get("problemTypes", []):
+            for desc_entry in pt.get("descriptions", []):
+                cwe_id = desc_entry.get("cweId")
+                text = desc_entry.get("description") or desc_entry.get("value") or ""
+                if text.lower() == "n/a":
+                    continue
+                if cwe_id and not text.startswith(cwe_id):
+                    val = f"{cwe_id} {text}".strip()
+                else:
+                    val = text or cwe_id
+                if val:
+                    cwe_items.append(val)
     cwe = ", ".join(cwe_items)
     references = cna.get("references", [])
     exploits = [r["url"] for r in references if "exploit-db.com" in r["url"] or "github.com" in r["url"]]
@@ -177,7 +204,7 @@ def main(input_file: Path = Path("cves.txt")) -> None:
         return
     cve_ids = [line.strip() for line in input_file.read_text().splitlines() if line.strip()]
     wb = Workbook()
-    ws = wb.active
+    ws: "Worksheet" = wb.active if wb.active is not None else wb.create_sheet()
     ws.title = f"Batch_{datetime.now().strftime('%Y%m%d_%H%M')}"
     ws.append([
         "CVE ID",
