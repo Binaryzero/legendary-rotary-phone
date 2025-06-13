@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(mes
 MITRE_BASE = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves"
 
 
+
 @dataclass
 class CveMetadata:
     """Container for parsed CVE information."""
@@ -31,20 +32,20 @@ class CveMetadata:
     affected: str = ""
     references: str = ""
 
+
 def fetch_cve(cve_id: str) -> Optional[dict]:
+
     """Retrieve a CVE JSON record from the MITRE repository.
 
     Parameters
     ----------
     cve_id:
         The CVE identifier, e.g. ``"CVE-2023-1234"``.
-
     Returns
     -------
     dict | None
         Parsed JSON content if found, otherwise ``None`` when the request fails.
     """
-
     try:
         parts = cve_id.split("-")
         if len(parts) < 3:
@@ -102,7 +103,6 @@ def parse_cve(cve_json: dict) -> CveMetadata:
         return "", ""
 
     cvss, vector = find_cvss()
-
     cwe_items = []
     for container in [cna] + containers.get("adp", []):
         for pt in container.get("problemTypes", []):
@@ -150,7 +150,6 @@ def parse_cve(cve_json: dict) -> CveMetadata:
         references=", ".join(r.get("url", "") for r in references),
     )
 
-
 def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports")) -> None:
 
     """Generate a Word report based on the template.
@@ -161,7 +160,6 @@ def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports"
         Identifier for the CVE.
     meta:
         Parsed metadata dataclass returned by :func:`parse_cve`.
-
     out_dir:
         Directory where the generated report will be saved.
 
@@ -172,7 +170,7 @@ def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports"
     if not template.exists():
         logging.error("CVE_Report_Template.docx not found")
         return
-    doc = Document(template)
+    doc = Document(template_path)
 
     for p in doc.paragraphs:
         txt = p.text.strip()
@@ -198,7 +196,6 @@ def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports"
             p.text = "\n".join(mitigations)
         elif txt.startswith("List external references"):
             p.text = meta.references
-
     out_dir.mkdir(exist_ok=True)
     doc.save(out_dir / f"{cve_id}.docx")
 
@@ -209,7 +206,6 @@ def main(
     reports_dir: Path = Path("reports"),
     generate_reports: bool = True,
 ) -> None:
-
     """Read CVE IDs, fetch their metadata and save results to Excel."""
     if not input_file.exists():
         logging.error("Missing %s input file.", input_file)
@@ -252,7 +248,7 @@ def main(
         if generate_reports:
             create_report(cve_id, parsed, reports_dir)
     wb.save(str(output_file))
-    logging.info("%s created.", output_file)
+    logging.info("%s created.", output_file
 
 if __name__ == "__main__":
     import argparse
@@ -262,6 +258,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", default="CVE_Results.xlsx", help="Path to Excel output file")
     parser.add_argument("--reports-dir", default="reports", help="Directory to store Word reports")
     parser.add_argument("--skip-reports", action="store_true", help="Do not generate Word reports")
+
     args = parser.parse_args()
 
     main(

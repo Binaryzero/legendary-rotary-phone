@@ -4,7 +4,6 @@ import pytest
 
 import sys
 from pathlib import Path
-
 import types
 
 SAMPLE_JSON = {
@@ -56,6 +55,13 @@ def test_parse_cve_extracts_fields():
     assert parsed.mitigations == "https://vendor.com/advisories/123"
     assert parsed.affected == "Acme App 1.0"
 
+    fetcher.main(
+        input_file,
+        excel_out=tmp_path / "out.xlsx",
+        template_path=tmp_path / "template.docx",
+        report_dir=tmp_path / "reports",
+        write_reports=False,
+    )
 
 def test_fetch_cve_returns_none_on_failure():
     with patch("cve_metadata_fetcher.requests.get") as mock_get:
@@ -94,7 +100,6 @@ class DummyWorkbook:
 
     def save(self, path):
         self.saved = path
-
 
 def test_main_allows_skipping_reports(tmp_path):
     input_file = tmp_path / "cves.txt"

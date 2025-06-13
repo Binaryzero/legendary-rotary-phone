@@ -17,10 +17,11 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 - Extracts: mitigation guidance and advisory references
 - Outputs results to Excel with structured columns and batch naming
 - Generates individual Word reports for each CVE in the `reports/` directory
+- Word report generation can be disabled with the `--skip-docs` flag
 
 ## Usage
 1. Populate `cves.txt` with one CVE ID per line
-2. Run the script:
+2. Run the script (optional flags shown with defaults):
 ```
 pip install requests openpyxl python-docx
 python cve_metadata_fetcher.py --output results.xlsx
