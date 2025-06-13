@@ -138,13 +138,37 @@ def main():
     wb = Workbook()
     ws = wb.active
     ws.title = f"Batch_{datetime.now().strftime('%Y%m%d_%H%M')}"
-    ws.append(["CVE ID", "Description", "CVSS", "Vector", "CWE", "Exploit", "ExploitRefs", "FixVersion", "Mitigations"])
+    ws.append([
+        "CVE ID",
+        "Description",
+        "CVSS",
+        "Vector",
+        "CWE",
+        "Exploit",
+        "ExploitRefs",
+        "FixVersion",
+        "Mitigations",
+        "Affected",
+        "References",
+    ])
     for cve_id in cve_ids:
         data = fetch_cve(cve_id)
         if not data:
             continue
         parsed = parse_cve(data)
-        ws.append([cve_id] + [parsed.get(k, "") for k in ["Description", "CVSS", "Vector", "CWE", "Exploit", "ExploitRefs", "FixVersion", "Mitigations"]])
+        ws.append([
+            cve_id,
+            parsed.get("Description", ""),
+            parsed.get("CVSS", ""),
+            parsed.get("Vector", ""),
+            parsed.get("CWE", ""),
+            parsed.get("Exploit", ""),
+            parsed.get("ExploitRefs", ""),
+            parsed.get("FixVersion", ""),
+            parsed.get("Mitigations", ""),
+            parsed.get("Affected", ""),
+            parsed.get("References", ""),
+        ])
         create_report(cve_id, parsed)
     wb.save("CVE_Results.xlsx")
     logging.info("CVE_Results.xlsx created.")
