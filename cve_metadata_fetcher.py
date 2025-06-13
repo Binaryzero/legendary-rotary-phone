@@ -8,6 +8,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(mes
 MITRE_BASE = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves"
 
 def fetch_cve(cve_id):
+    """Retrieve a CVE JSON record from the MITRE repository.
+
+    Args:
+        cve_id (str): The CVE identifier, e.g. ``"CVE-2023-1234"``.
+
+    Returns:
+        dict | None: Parsed JSON content if found, otherwise ``None`` when the
+        request fails.
+    """
     year = cve_id.split("-")[1]
     bucket = int(cve_id.split("-")[2]) // 1000
     url = f"{MITRE_BASE}/{year}/{bucket}xxx/{cve_id}.json"
@@ -18,6 +27,16 @@ def fetch_cve(cve_id):
     return r.json()
 
 def parse_cve(cve_json):
+    """Extract relevant metadata from a CVE JSON document.
+
+    Args:
+        cve_json (dict): JSON structure as returned by :func:`fetch_cve`.
+
+    Returns:
+        dict: A dictionary with keys ``Description``, ``CVSS``, ``Vector``,
+        ``CWE``, ``Exploit``, ``ExploitRefs``, ``FixVersion`` and
+        ``Mitigations``.
+    """
     cna = cve_json["containers"]["cna"]
     desc = cna.get("descriptions", [{}])[0].get("value", "")
     cvss = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("baseScore", "")
@@ -49,6 +68,7 @@ def parse_cve(cve_json):
     }
 
 def main():
+    """Read CVE IDs, fetch their metadata and save results to Excel."""
     input_path = Path("cves.txt")
     if not input_path.exists():
         logging.error("Missing cves.txt input file.")
