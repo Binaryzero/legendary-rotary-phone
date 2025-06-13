@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from openpyxl.worksheet.worksheet import Worksheet
-    from docx import Document
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
