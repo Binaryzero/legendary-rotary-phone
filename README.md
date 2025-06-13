@@ -24,11 +24,10 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 2. Run the script (optional flags shown with defaults):
 ```
 pip install requests openpyxl python-docx
-python cve_metadata_fetcher.py [cves.txt] --excel CVE_Results.xlsx \
-    --template CVE_Report_Template.docx --reports reports [--skip-docs]
+python cve_metadata_fetcher.py --output results.xlsx
 ```
-3. Open the Excel output for the research summary
-4. Review generated reports in the chosen reports directory
+3. Open the output file (default `CVE_Results.xlsx`, or as specified by `--output`) for the research summary
+4. Review generated reports in the directory given by `--reports-dir` unless `--skip-reports` was used
 
 ## Testing
 This project uses `pytest` to run the unit tests located in the `tests/`

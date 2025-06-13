@@ -3,20 +3,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import re
 
 import requests
-from docx import Document
 from openpyxl import Workbook
-from openpyxl.styles import Font
-from openpyxl.utils import get_column_letter
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openpyxl.worksheet.worksheet import Worksheet
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 MITRE_BASE = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves"
 
-# Precompiled regex for validating CVE identifiers
-cve_pattern = re.compile(r"^CVE-(?P<year>\d{4})-(?P<number>\d{4,})$")
 
 
 @dataclass
@@ -34,42 +32,46 @@ class CveMetadata:
     affected: str = ""
     references: str = ""
 
-def fetch_cve(cve_id: str, session: Optional[requests.Session] = None) -> Optional[dict]:
+
+def fetch_cve(cve_id: str) -> Optional[dict]:
+
     """Retrieve a CVE JSON record from the MITRE repository.
 
     Parameters
     ----------
     cve_id:
         The CVE identifier, e.g. ``"CVE-2023-1234"``.
-    session:
-        Optional :class:`requests.Session` to reuse for HTTP calls.
-
     Returns
     -------
     dict | None
         Parsed JSON content if found, otherwise ``None`` when the request fails.
     """
+    try:
+        parts = cve_id.split("-")
+        if len(parts) < 3:
+            logging.warning("Invalid CVE ID format: %s", cve_id)
+            return None
+        year = parts[1]
+        if not (year.isdigit() and len(year) == 4):
+            logging.warning("Invalid year in CVE ID: %s", cve_id)
+            return None
 
-    match = cve_pattern.fullmatch(cve_id)
-    if not match:
+        bucket_str = parts[2]
+        if not bucket_str.isdigit():
+            logging.warning("Invalid numeric part in CVE ID: %s", cve_id)
+            return None
+        bucket = int(bucket_str) // 1000
+    except IndexError:
         logging.warning("Invalid CVE ID format: %s", cve_id)
         return None
 
-    year = match.group("year")
-    number_str = match.group("number")
-    bucket = int(number_str) // 1000
-
     url = f"{MITRE_BASE}/{year}/{bucket}xxx/{cve_id}.json"
-    sess = session or requests.Session()
     try:
-        response = sess.get(url, timeout=10)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
     except requests.RequestException as exc:
         logging.warning("Failed to fetch %s: %s", cve_id, exc)
         return None
-    finally:
-        if session is None:
-            sess.close()
     return response.json()
 
 def parse_cve(cve_json: dict) -> CveMetadata:
@@ -83,21 +85,38 @@ def parse_cve(cve_json: dict) -> CveMetadata:
     CveMetadata
         Structured metadata extracted from the CVE document.
     """
-    cna = cve_json.get("containers", {}).get("cna", {})
-    descriptions_list = cna.get("descriptions", [])
-    desc = descriptions_list[0].get("value", "") if descriptions_list else ""
+    containers = cve_json.get("containers", {})
+    cna = containers.get("cna", {})
+    desc = cna.get("descriptions", [{}])[0].get("value", "")
 
-    metrics_list = cna.get("metrics", [])
-    cvss_data = metrics_list[0].get("cvssV3_1", {}) if metrics_list else {}
-    base_score_val = cvss_data.get("baseScore", "")
-    cvss = str(base_score_val) if base_score_val != "" else ""
-    vector = cvss_data.get("vectorString", "")
+    def find_cvss() -> tuple[str, str]:
+        """Search available containers for a CVSS score and vector."""
+        order = containers.get("adp", []) + [cna]
+        for cont in order:
+            if not cont:
+                continue
+            for metric in cont.get("metrics", []):
+                for key in ("cvssV3_1", "cvssV3_0", "cvssV2_1", "cvssV2_0", "cvssV2"):
+                    data = metric.get(key)
+                    if data:
+                        return data.get("baseScore", ""), data.get("vectorString", "")
+        return "", ""
+
+    cvss, vector = find_cvss()
     cwe_items = []
-    for pt in cna.get("problemTypes", []):
-        for desc_entry in pt.get("descriptions", []):
-            val = desc_entry.get("description") or desc_entry.get("value")
-            if val:
-                cwe_items.append(val)
+    for container in [cna] + containers.get("adp", []):
+        for pt in container.get("problemTypes", []):
+            for desc_entry in pt.get("descriptions", []):
+                cwe_id = desc_entry.get("cweId")
+                text = desc_entry.get("description") or desc_entry.get("value") or ""
+                if text.lower() == "n/a":
+                    continue
+                if cwe_id and not text.startswith(cwe_id):
+                    val = f"{cwe_id} {text}".strip()
+                else:
+                    val = text or cwe_id
+                if val:
+                    cwe_items.append(val)
     cwe = ", ".join(cwe_items)
     references = cna.get("references", [])
     exploits = [r["url"] for r in references if "exploit-db.com" in r["url"] or "github.com" in r["url"]]
@@ -131,8 +150,8 @@ def parse_cve(cve_json: dict) -> CveMetadata:
         references=", ".join(r.get("url", "") for r in references),
     )
 
+def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports")) -> None:
 
-def create_report(cve_id: str, meta: CveMetadata, template_path: Path, output_dir: Path) -> None:
     """Generate a Word report based on the template.
 
     Parameters
@@ -141,13 +160,15 @@ def create_report(cve_id: str, meta: CveMetadata, template_path: Path, output_di
         Identifier for the CVE.
     meta:
         Parsed metadata dataclass returned by :func:`parse_cve`.
-    template_path:
-        Path to the Word template file.
-    output_dir:
-        Directory where the generated report will be stored.
+    out_dir:
+        Directory where the generated report will be saved.
+
     """
-    if not template_path.exists():
-        logging.error("%s not found", template_path)
+    from docx import Document
+
+    template = Path("CVE_Report_Template.docx")
+    if not template.exists():
+        logging.error("CVE_Report_Template.docx not found")
         return
     doc = Document(template_path)
 
@@ -175,32 +196,23 @@ def create_report(cve_id: str, meta: CveMetadata, template_path: Path, output_di
             p.text = "\n".join(mitigations)
         elif txt.startswith("List external references"):
             p.text = meta.references
-
-    output_dir.mkdir(exist_ok=True)
-    doc.save(output_dir / f"{cve_id}.docx")
-
-def iter_cve_ids(file_path: Path):
-    """Yield CVE IDs from ``file_path`` one per line."""
-    with file_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if stripped:
-                yield stripped
-
+    out_dir.mkdir(exist_ok=True)
+    doc.save(out_dir / f"{cve_id}.docx")
 
 def main(
     input_file: Path = Path("cves.txt"),
-    excel_out: Path = Path("CVE_Results.xlsx"),
-    template_path: Path = Path("CVE_Report_Template.docx"),
-    report_dir: Path = Path("reports"),
-    write_reports: bool = True,
+    *,
+    output_file: Path = Path("CVE_Results.xlsx"),
+    reports_dir: Path = Path("reports"),
+    generate_reports: bool = True,
 ) -> None:
     """Read CVE IDs, fetch their metadata and save results to Excel."""
     if not input_file.exists():
         logging.error("Missing %s input file.", input_file)
         return
+    cve_ids = [line.strip() for line in input_file.read_text().splitlines() if line.strip()]
     wb = Workbook()
-    ws = wb.active
+    ws: "Worksheet" = wb.active if wb.active is not None else wb.create_sheet()
     ws.title = f"Batch_{datetime.now().strftime('%Y%m%d_%H%M')}"
     ws.append([
         "CVE ID",
@@ -215,56 +227,43 @@ def main(
         "Affected",
         "References",
     ])
-    ws.freeze_panes = "A2"
-    header = ws[1]
-    for cell in header:
-        cell.font = Font(bold=True)
-
-    with requests.Session() as session:
-        for cve_id in iter_cve_ids(input_file):
-            logging.info("Processing %s", cve_id)
-            data = fetch_cve(cve_id, session)
-            if not data:
-                continue
-            parsed = parse_cve(data)
-            ws.append([
-                cve_id,
-                parsed.description,
-                parsed.cvss,
-                parsed.vector,
-                parsed.cwe,
-                parsed.exploit,
-                parsed.exploit_refs,
-                parsed.fix_version,
-                parsed.mitigations,
-                parsed.affected,
-                parsed.references,
-            ])
-            if write_reports:
-                create_report(cve_id, parsed, template_path, report_dir)
-
-    for idx, column in enumerate(ws.iter_cols(max_col=ws.max_column, max_row=ws.max_row), start=1):
-        length = max(len(str(cell.value or "")) for cell in column)
-        ws.column_dimensions[get_column_letter(idx)].width = max(length + 2, 10)
-
-    wb.save(excel_out)
-    logging.info("%s created.", excel_out)
+    for cve_id in cve_ids:
+        data = fetch_cve(cve_id)
+        if not data:
+            continue
+        parsed = parse_cve(data)
+        ws.append([
+            cve_id,
+            parsed.description,
+            parsed.cvss,
+            parsed.vector,
+            parsed.cwe,
+            parsed.exploit,
+            parsed.exploit_refs,
+            parsed.fix_version,
+            parsed.mitigations,
+            parsed.affected,
+            parsed.references,
+        ])
+        if generate_reports:
+            create_report(cve_id, parsed, reports_dir)
+    wb.save(str(output_file))
+    logging.info("%s created.", output_file
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Fetch CVE metadata from MITRE")
     parser.add_argument("input", nargs="?", default="cves.txt", help="Path to file containing CVE IDs")
-    parser.add_argument("--excel", default="CVE_Results.xlsx", help="Output Excel file")
-    parser.add_argument("--template", default="CVE_Report_Template.docx", help="Word template path")
-    parser.add_argument("--reports", default="reports", help="Directory for Word reports")
-    parser.add_argument("--skip-docs", action="store_true", help="Skip Word report generation")
+    parser.add_argument("-o", "--output", default="CVE_Results.xlsx", help="Path to Excel output file")
+    parser.add_argument("--reports-dir", default="reports", help="Directory to store Word reports")
+    parser.add_argument("--skip-reports", action="store_true", help="Do not generate Word reports")
+
     args = parser.parse_args()
 
     main(
         Path(args.input),
-        Path(args.excel),
-        Path(args.template),
-        Path(args.reports),
-        write_reports=not args.skip_docs,
+        output_file=Path(args.output),
+        reports_dir=Path(args.reports_dir),
+        generate_reports=not args.skip_reports,
     )
