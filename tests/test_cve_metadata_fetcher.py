@@ -8,29 +8,7 @@ import pytest
 from cve_metadata_fetcher import parse_cve, fetch_cve
 
 
-SAMPLE_JSON = {
-    "containers": {
-        "cna": {
-            "descriptions": [{"lang": "en", "value": "Sample description"}],
-            "metrics": [{
-                "cvssV3_1": {
-                    "baseScore": 5.0,
-                    "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N"
-                }
-            }],
-            "problemTypes": [{
-                "descriptions": [{
-                    "description": [{"lang": "en", "value": "CWE-79"}]
-                }]
-            }],
-            "references": [
-                {"url": "https://exploit-db.com/exploits/1"},
-                {"url": "https://vendor.com/advisories/123"},
-                {"url": "https://example.com/patch", "tags": ["upgrade"]}
-            ]
-        }
-    }
-}
+SAMPLE_CVE_DATA = {
 
 
 def test_parse_cve_extracts_fields():
