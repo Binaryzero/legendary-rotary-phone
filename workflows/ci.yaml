@@ -6,7 +6,7 @@ on:
       - '*'               # CI runs on every branch push
   pull_request:
     branches:
-      - main             # CI runs on PRs targeting main
+      - '*'             # CI runs on PRs targeting main
   workflow_dispatch:     # ← Add this line
 
 jobs:
