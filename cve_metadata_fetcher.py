@@ -89,9 +89,14 @@ def parse_cve(cve_json: dict) -> CveMetadata:
         Structured metadata extracted from the CVE document.
     """
     cna = cve_json.get("containers", {}).get("cna", {})
-    desc = cna.get("descriptions", [{}])[0].get("value", "")
-    cvss = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("baseScore", "")
-    vector = cna.get("metrics", [{}])[0].get("cvssV3_1", {}).get("vectorString", "")
+    descriptions_list = cna.get("descriptions", [])
+    desc = descriptions_list[0].get("value", "") if descriptions_list else ""
+
+    metrics_list = cna.get("metrics", [])
+    cvss_data = metrics_list[0].get("cvssV3_1", {}) if metrics_list else {}
+    base_score_val = cvss_data.get("baseScore", "")
+    cvss = str(base_score_val) if base_score_val != "" else ""
+    vector = cvss_data.get("vectorString", "")
     cwe_items = []
     for pt in cna.get("problemTypes", []):
         for desc_entry in pt.get("descriptions", []):

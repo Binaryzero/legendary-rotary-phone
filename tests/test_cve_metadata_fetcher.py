@@ -126,7 +126,7 @@ def test_parse_cve_extracts_fields():
     parsed = parse_cve(SAMPLE_JSON)
     assert isinstance(parsed, CveMetadata)
     assert parsed.description == "Sample description"
-    assert parsed.cvss == 5.0
+    assert parsed.cvss == "5.0"
     assert parsed.vector == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N"
     assert parsed.cwe == "CWE-79"
     assert parsed.exploit == "Yes"
@@ -134,6 +134,25 @@ def test_parse_cve_extracts_fields():
     assert parsed.fix_version == "https://example.com/patch"
     assert parsed.mitigations == "https://vendor.com/advisories/123"
     assert parsed.affected == "Acme App 1.0"
+
+
+def test_parse_cve_handles_missing_lists():
+    empty_lists = {
+        "containers": {
+            "cna": {
+                "descriptions": [],
+                "metrics": [],
+                "problemTypes": [],
+                "references": [],
+                "affected": [],
+            }
+        }
+    }
+    parsed = parse_cve(empty_lists)
+    assert parsed.description == ""
+    assert parsed.cvss == ""
+    assert parsed.vector == ""
+    assert parsed.cwe == ""
 
 
 def test_fetch_cve_returns_none_on_failure():
