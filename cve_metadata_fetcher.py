@@ -1,7 +1,11 @@
-import json, requests, logging
-from openpyxl import Workbook
+import argparse
+import json
+import logging
 from datetime import datetime
 from pathlib import Path
+
+import requests
+from openpyxl import Workbook
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
@@ -49,9 +53,24 @@ def parse_cve(cve_json):
     }
 
 def main():
-    input_path = Path("cves.txt")
+    parser = argparse.ArgumentParser(description="Fetch CVE metadata from MITRE and output to Excel")
+    parser.add_argument(
+        "-i",
+        "--input",
+        default="cves.txt",
+        help="Path to input file with CVE IDs (default: cves.txt)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="CVE_Results.xlsx",
+        help="Filename for Excel output (default: CVE_Results.xlsx)",
+    )
+    args = parser.parse_args()
+
+    input_path = Path(args.input)
     if not input_path.exists():
-        logging.error("Missing cves.txt input file.")
+        logging.error(f"Missing {input_path} input file.")
         return
     cve_ids = [line.strip() for line in input_path.read_text().splitlines() if line.strip()]
     wb = Workbook()
@@ -63,9 +82,24 @@ def main():
         if not data:
             continue
         parsed = parse_cve(data)
-        ws.append([cve_id] + [parsed.get(k, "") for k in ["Description", "CVSS", "Vector", "CWE", "Exploit", "ExploitRefs", "FixVersion", "Mitigations"]])
-    wb.save("CVE_Results.xlsx")
-    logging.info("CVE_Results.xlsx created.")
+        ws.append(
+            [cve_id]
+            + [
+                parsed.get(k, "")
+                for k in [
+                    "Description",
+                    "CVSS",
+                    "Vector",
+                    "CWE",
+                    "Exploit",
+                    "ExploitRefs",
+                    "FixVersion",
+                    "Mitigations",
+                ]
+            ]
+        )
+    wb.save(args.output)
+    logging.info(f"{args.output} created.")
 
 if __name__ == "__main__":
     main()
