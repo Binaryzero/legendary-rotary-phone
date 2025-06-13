@@ -70,7 +70,7 @@ def main():
 
     input_path = Path(args.input)
     if not input_path.exists():
-        logging.error(f"Missing {input_path} input file.")
+        logging.error(f"Missing {input_path.resolve()} input file.")
         return
     cve_ids = [line.strip() for line in input_path.read_text().splitlines() if line.strip()]
     wb = Workbook()
