@@ -98,7 +98,11 @@ def main():
                 ]
             ]
         )
-    wb.save(args.output)
+    try:
+        wb.save(args.output)
+    except Exception as e:
+        logging.error(f"Failed to save {args.output}: {e}")
+        return
     logging.info(f"{args.output} created.")
 
 if __name__ == "__main__":
