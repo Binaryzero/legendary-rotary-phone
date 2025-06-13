@@ -25,7 +25,7 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 pip install requests openpyxl python-docx
 python cve_metadata_fetcher.py --output results.xlsx
 ```
-3. Open `results.xlsx` (or the file specified with `--output`) for the research summary
+3. Open the output file (default `CVE_Results.xlsx`, or as specified by `--output`) for the research summary
 4. Review generated reports in the directory given by `--reports-dir` unless `--skip-reports` was used
 
 ## Testing
