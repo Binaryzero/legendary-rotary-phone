@@ -2,11 +2,10 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import requests
 from openpyxl import Workbook
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from openpyxl.worksheet.worksheet import Worksheet
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 MITRE_BASE = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves"
-
 
 
 @dataclass
@@ -34,7 +32,6 @@ class CveMetadata:
 
 
 def fetch_cve(cve_id: str) -> Optional[dict]:
-
     """Retrieve a CVE JSON record from the MITRE repository.
 
     Parameters
@@ -73,6 +70,7 @@ def fetch_cve(cve_id: str) -> Optional[dict]:
         logging.warning("Failed to fetch %s: %s", cve_id, exc)
         return None
     return response.json()
+
 
 def parse_cve(cve_json: dict) -> CveMetadata:
     """Extract relevant metadata from a CVE JSON document.
@@ -119,7 +117,11 @@ def parse_cve(cve_json: dict) -> CveMetadata:
                     cwe_items.append(val)
     cwe = ", ".join(cwe_items)
     references = cna.get("references", [])
-    exploits = [r["url"] for r in references if "exploit-db.com" in r["url"] or "github.com" in r["url"]]
+    exploits = [
+        r["url"]
+        for r in references
+        if "exploit-db.com" in r["url"] or "github.com" in r["url"]
+    ]
     exploit_flag = "Yes" if exploits else "No"
     fix_version = ""
     mitigations = []
@@ -150,8 +152,10 @@ def parse_cve(cve_json: dict) -> CveMetadata:
         references=", ".join(r.get("url", "") for r in references),
     )
 
-def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports")) -> None:
 
+def create_report(
+    cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports")
+) -> None:
     """Generate a Word report based on the template.
 
     Parameters
@@ -170,7 +174,7 @@ def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports"
     if not template.exists():
         logging.error("CVE_Report_Template.docx not found")
         return
-    doc = Document(template_path)
+    doc = Document(str(template))
 
     for p in doc.paragraphs:
         txt = p.text.strip()
@@ -197,7 +201,8 @@ def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports"
         elif txt.startswith("List external references"):
             p.text = meta.references
     out_dir.mkdir(exist_ok=True)
-    doc.save(out_dir / f"{cve_id}.docx")
+    doc.save(str(out_dir / f"{cve_id}.docx"))
+
 
 def main(
     input_file: Path = Path("cves.txt"),
@@ -210,54 +215,69 @@ def main(
     if not input_file.exists():
         logging.error("Missing %s input file.", input_file)
         return
-    cve_ids = [line.strip() for line in input_file.read_text().splitlines() if line.strip()]
+    cve_ids = [
+        line.strip() for line in input_file.read_text().splitlines() if line.strip()
+    ]
     wb = Workbook()
     ws: "Worksheet" = wb.active if wb.active is not None else wb.create_sheet()
     ws.title = f"Batch_{datetime.now().strftime('%Y%m%d_%H%M')}"
-    ws.append([
-        "CVE ID",
-        "Description",
-        "CVSS",
-        "Vector",
-        "CWE",
-        "Exploit",
-        "ExploitRefs",
-        "FixVersion",
-        "Mitigations",
-        "Affected",
-        "References",
-    ])
+    ws.append(
+        [
+            "CVE ID",
+            "Description",
+            "CVSS",
+            "Vector",
+            "CWE",
+            "Exploit",
+            "ExploitRefs",
+            "FixVersion",
+            "Mitigations",
+            "Affected",
+            "References",
+        ]
+    )
     for cve_id in cve_ids:
         data = fetch_cve(cve_id)
         if not data:
             continue
         parsed = parse_cve(data)
-        ws.append([
-            cve_id,
-            parsed.description,
-            parsed.cvss,
-            parsed.vector,
-            parsed.cwe,
-            parsed.exploit,
-            parsed.exploit_refs,
-            parsed.fix_version,
-            parsed.mitigations,
-            parsed.affected,
-            parsed.references,
-        ])
+        ws.append(
+            [
+                cve_id,
+                parsed.description,
+                parsed.cvss,
+                parsed.vector,
+                parsed.cwe,
+                parsed.exploit,
+                parsed.exploit_refs,
+                parsed.fix_version,
+                parsed.mitigations,
+                parsed.affected,
+                parsed.references,
+            ]
+        )
         if generate_reports:
             create_report(cve_id, parsed, reports_dir)
     wb.save(str(output_file))
-    logging.info("%s created.", output_file
+    logging.info("%s created.", output_file)
+
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Fetch CVE metadata from MITRE")
-    parser.add_argument("input", nargs="?", default="cves.txt", help="Path to file containing CVE IDs")
-    parser.add_argument("-o", "--output", default="CVE_Results.xlsx", help="Path to Excel output file")
-    parser.add_argument("--reports-dir", default="reports", help="Directory to store Word reports")
-    parser.add_argument("--skip-reports", action="store_true", help="Do not generate Word reports")
+    parser.add_argument(
+        "input", nargs="?", default="cves.txt", help="Path to file containing CVE IDs"
+    )
+    parser.add_argument(
+        "-o", "--output", default="CVE_Results.xlsx", help="Path to Excel output file"
+    )
+    parser.add_argument(
+        "--reports-dir", default="reports", help="Directory to store Word reports"
+    )
+    parser.add_argument(
+        "--skip-reports", action="store_true", help="Do not generate Word reports"
+    )
 
     args = parser.parse_args()
 
