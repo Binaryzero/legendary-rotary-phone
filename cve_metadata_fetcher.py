@@ -9,6 +9,7 @@ import requests
 from docx import Document
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
@@ -183,6 +184,7 @@ def main(
     excel_out: Path = Path("CVE_Results.xlsx"),
     template_path: Path = Path("CVE_Report_Template.docx"),
     report_dir: Path = Path("reports"),
+    write_reports: bool = True,
 ) -> None:
     """Read CVE IDs, fetch their metadata and save results to Excel."""
     if not input_file.exists():
@@ -230,11 +232,12 @@ def main(
                 parsed.affected,
                 parsed.references,
             ])
-            create_report(cve_id, parsed, template_path, report_dir)
+            if write_reports:
+                create_report(cve_id, parsed, template_path, report_dir)
 
     for idx, column in enumerate(ws.iter_cols(max_col=ws.max_column, max_row=ws.max_row), start=1):
         length = max(len(str(cell.value or "")) for cell in column)
-        ws.column_dimensions[chr(64 + idx)].width = max(length + 2, 10)
+        ws.column_dimensions[get_column_letter(idx)].width = max(length + 2, 10)
 
     wb.save(excel_out)
     logging.info("%s created.", excel_out)
@@ -247,6 +250,13 @@ if __name__ == "__main__":
     parser.add_argument("--excel", default="CVE_Results.xlsx", help="Output Excel file")
     parser.add_argument("--template", default="CVE_Report_Template.docx", help="Word template path")
     parser.add_argument("--reports", default="reports", help="Directory for Word reports")
+    parser.add_argument("--skip-docs", action="store_true", help="Skip Word report generation")
     args = parser.parse_args()
 
-    main(Path(args.input), Path(args.excel), Path(args.template), Path(args.reports))
+    main(
+        Path(args.input),
+        Path(args.excel),
+        Path(args.template),
+        Path(args.reports),
+        write_reports=not args.skip_docs,
+    )

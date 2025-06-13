@@ -17,6 +17,7 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 - Extracts: mitigation guidance and advisory references
 - Outputs results to Excel with structured columns and batch naming
 - Generates individual Word reports for each CVE in the `reports/` directory
+- Word report generation can be disabled with the `--skip-docs` flag
 
 ## Usage
 1. Populate `cves.txt` with one CVE ID per line
@@ -24,7 +25,7 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 ```
 pip install requests openpyxl python-docx
 python cve_metadata_fetcher.py [cves.txt] --excel CVE_Results.xlsx \
-    --template CVE_Report_Template.docx --reports reports
+    --template CVE_Report_Template.docx --reports reports [--skip-docs]
 ```
 3. Open the Excel output for the research summary
 4. Review generated reports in the chosen reports directory

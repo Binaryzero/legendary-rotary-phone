@@ -46,7 +46,11 @@ class DummyWorksheet:
         self.freeze_panes = None
 
     def append(self, row):
-        self.rows.append([DummyCell(v) for v in row])
+        cells = [DummyCell(v) for v in row]
+        self.rows.append(cells)
+        for idx in range(len(cells)):
+            letter = chr(65 + idx)
+            self.column_dimensions.setdefault(letter, DummyColumnDimension())
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
@@ -77,12 +81,28 @@ class DummyWorkbook:
         pass
 
 
+class DummySession:
+    def __init__(self):
+        pass
+
+    def get(self, *a, **k):
+        return types.SimpleNamespace(json=lambda: {}, raise_for_status=lambda: None)
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
 sys.modules.setdefault(
     "requests",
     types.SimpleNamespace(
         RequestException=Exception,
         get=lambda *a, **k: None,
-        Session=lambda: types.SimpleNamespace(get=lambda *a, **k: None, close=lambda: None),
+        Session=DummySession,
     ),
 )
 sys.modules.setdefault("docx", types.SimpleNamespace(Document=DummyDocument))
@@ -93,12 +113,13 @@ sys.modules.setdefault(
     ),
 )
 sys.modules.setdefault("openpyxl.styles", types.SimpleNamespace(Font=lambda *a, **k: None))
+sys.modules.setdefault("openpyxl.utils", types.SimpleNamespace(get_column_letter=lambda i: chr(64 + i)))
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import os
 
-from cve_metadata_fetcher import CveMetadata, create_report, fetch_cve, parse_cve
+from cve_metadata_fetcher import CveMetadata, create_report, fetch_cve, parse_cve, main
 
 
 SAMPLE_JSON = {
@@ -179,4 +200,32 @@ def test_create_report_runs(tmp_path, monkeypatch):
     create_report("CVE-0000-0001", meta, template, Path("."))
     assert hasattr(dummy, "saved")
     assert dummy.saved.name == "CVE-0000-0001.docx"
+
+
+def test_main_skip_docs(monkeypatch, tmp_path):
+    input_file = tmp_path / "cves.txt"
+    input_file.write_text("CVE-1111-2222")
+
+    monkeypatch.setattr(
+        'cve_metadata_fetcher.fetch_cve',
+        lambda *_: SAMPLE_JSON,
+    )
+
+    called = False
+
+    def fake_report(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr('cve_metadata_fetcher.create_report', fake_report)
+
+    main(
+        input_file,
+        excel_out=tmp_path / "out.xlsx",
+        template_path=tmp_path / "template.docx",
+        report_dir=tmp_path / "reports",
+        write_reports=False,
+    )
+
+    assert not called
 
