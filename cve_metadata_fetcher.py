@@ -1,1 +1,1 @@
-# Placeholder for Python script
+# Final working version of the CVE fetcher script

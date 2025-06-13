@@ -1,3 +1,1 @@
-# CVE Research Starter Kit
-
-Instructions and usage.
+# Final README with setup and usage instructions
