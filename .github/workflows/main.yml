@@ -1,21 +1,23 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
   push:
-    branches:
-      - '*'               # CI runs on every branch push
+    branches: ['*']
   pull_request:
-    branches:
-      - '*'             # CI runs on PRs targeting main
-  workflow_dispatch:     # ← Add this line
+    branches: ['main']
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout PR branch
         uses: actions/checkout@v4
+        with:
+          # ensures we checkout the PR head, not always main
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,13 +32,14 @@ jobs:
       - name: Run tests
         run: pytest
 
-      - name: Auto-merge main into PR branch if no conflicts
+      - name: Auto-merge main into PR (auto-resolve conflicts)
         if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-          if git merge origin/main; then
-            echo "Auto-merge successful"
-          else
-            echo "Merge conflict detected"
-            exit 1
-          fi
+          # merge with "theirs" strategy: in conflicts, take main's version
+          git merge origin/main -X theirs --no-edit
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
