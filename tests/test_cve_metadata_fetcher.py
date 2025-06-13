@@ -7,56 +7,6 @@ from pathlib import Path
 
 import types
 
-class DummyParagraph:
-    def __init__(self, text=""):
-        self.text = text
-
-
-class DummyDocument:
-    def __init__(self, *_, **__):
-        self.paragraphs = [
-            DummyParagraph("CVE ID:"),
-            DummyParagraph("Brief summary of the vulnerability."),
-            DummyParagraph("List of affected products or environments."),
-            DummyParagraph("Describe exploit vectors"),
-            DummyParagraph("Document any known fixes"),
-            DummyParagraph("List external references"),
-        ]
-
-    def save(self, *args, **_kwargs):
-        self.saved = args[0] if args else None
-
-
-class DummyWorksheet:
-    def __init__(self):
-        self.rows = []
-        self.title = ""
-
-    def append(self, row):
-        self.rows.append(row)
-
-
-class DummyWorkbook:
-    def __init__(self, *_, **__):
-        self.active = DummyWorksheet()
-
-    def save(self, *_args, **_kwargs):
-        pass
-
-
-sys.modules.setdefault(
-    "requests", types.SimpleNamespace(RequestException=Exception, get=lambda *a, **k: None)
-)
-sys.modules.setdefault("docx", types.SimpleNamespace(Document=DummyDocument))
-sys.modules.setdefault("openpyxl", types.SimpleNamespace(Workbook=DummyWorkbook))
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import os
-
-from cve_metadata_fetcher import CveMetadata, create_report, fetch_cve, parse_cve
-
-
 SAMPLE_JSON = {
     "containers": {
         "cna": {
@@ -68,7 +18,7 @@ SAMPLE_JSON = {
             "references": [
                 {"url": "https://exploit-db.com/exploits/1"},
                 {"url": "https://example.com/patch", "tags": ["upgrade"]},
-                {"url": "https://vendor.com/advisories/123"},
+        {"url": "https://vendor.com/advisories/123"},
             ],
             "affected": [
                 {"vendor": "Acme", "product": "App", "versions": [{"version": "1.0"}]}
@@ -76,7 +26,22 @@ SAMPLE_JSON = {
         }
     }
 }
-
+NESTED_JSON = {
+    "containers": {
+        "adp": [
+            {
+                "metrics": [
+                    {"other": {"type": "rating"}},
+                    {"cvssV3_1": {"baseScore": 8.8, "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}}
+                ],
+                "problemTypes": [
+                    {"descriptions": [{"cweId": "CWE-123", "description": "Sample CWE description"}]}
+                ]
+            }
+        ],
+        "cna": {}
+    }
+}
 
 def test_parse_cve_extracts_fields():
     parsed = parse_cve(SAMPLE_JSON)
@@ -102,17 +67,48 @@ def test_fetch_cve_invalid_format_ignored():
         assert fetch_cve("BADFORMAT") is None
         mock_get.assert_not_called()
 
+def test_parse_cve_handles_nested_metrics_and_cwe():
+    parsed = parse_cve(NESTED_JSON)
+    assert parsed.cvss == 8.8
+    assert parsed.vector == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    assert parsed.cwe == "CWE-123 Sample CWE description"
 
-def test_create_report_runs(tmp_path, monkeypatch):
-    template = tmp_path / "CVE_Report_Template.docx"
-    template.write_text("dummy")
-    monkeypatch.chdir(tmp_path)
 
-    dummy = DummyDocument()
-    monkeypatch.setattr('cve_metadata_fetcher.Document', lambda *_: dummy)
+class DummySheet:
+    def __init__(self):
+        self.rows = []
+        self.title = ""
 
-    meta = CveMetadata(description="desc")
-    create_report("CVE-0000-0001", meta)
-    assert hasattr(dummy, "saved")
-    assert dummy.saved.name == "CVE-0000-0001.docx"
+    def append(self, row):
+        self.rows.append(row)
 
+
+class DummyWorkbook:
+    def __init__(self):
+        self.active = DummySheet()
+        self.saved = None
+
+    def create_sheet(self):
+        self.active = DummySheet()
+        return self.active
+
+    def save(self, path):
+        self.saved = path
+
+
+def test_main_allows_skipping_reports(tmp_path):
+    input_file = tmp_path / "cves.txt"
+    input_file.write_text("CVE-1234-0001\n")
+    wb = DummyWorkbook()
+    with patch("cve_metadata_fetcher.fetch_cve", return_value=SAMPLE_JSON), patch(
+        "cve_metadata_fetcher.Workbook", return_value=wb
+    ), patch("cve_metadata_fetcher.create_report") as mock_report:
+        main(
+            input_file,
+            output_file=tmp_path / "out.xlsx",
+            reports_dir=tmp_path,
+            generate_reports=False,
+        )
+        assert not mock_report.called
+        assert wb.saved == str(tmp_path / "out.xlsx")
+        assert wb.active.rows
