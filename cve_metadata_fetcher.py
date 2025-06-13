@@ -91,7 +91,7 @@ def parse_cve(cve_json: dict) -> CveMetadata:
 
     def find_cvss() -> tuple[str, str]:
         """Search available containers for a CVSS score and vector."""
-        order = list(containers.get("adp", [])) + [cna]
+        order = containers.get("adp", []) + [cna]
         for cont in order:
             if not cont:
                 continue
