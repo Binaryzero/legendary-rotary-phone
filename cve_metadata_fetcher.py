@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import re
 
 import requests
 from docx import Document
@@ -12,6 +13,9 @@ from openpyxl.styles import Font
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 MITRE_BASE = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves"
+
+# Precompiled regex for validating CVE identifiers
+cve_pattern = re.compile(r"^CVE-(?P<year>\d{4})-(?P<number>\d{4,})$")
 
 
 @dataclass
@@ -45,24 +49,14 @@ def fetch_cve(cve_id: str, session: Optional[requests.Session] = None) -> Option
         Parsed JSON content if found, otherwise ``None`` when the request fails.
     """
 
-    try:
-        parts = cve_id.split("-")
-        if len(parts) < 3:
-            logging.warning("Invalid CVE ID format: %s", cve_id)
-            return None
-        year = parts[1]
-        if not (year.isdigit() and len(year) == 4):
-            logging.warning("Invalid year in CVE ID: %s", cve_id)
-            return None
-
-        bucket_str = parts[2]
-        if not bucket_str.isdigit():
-            logging.warning("Invalid numeric part in CVE ID: %s", cve_id)
-            return None
-        bucket = int(bucket_str) // 1000
-    except IndexError:
+    match = cve_pattern.fullmatch(cve_id)
+    if not match:
         logging.warning("Invalid CVE ID format: %s", cve_id)
         return None
+
+    year = match.group("year")
+    number_str = match.group("number")
+    bucket = int(number_str) // 1000
 
     url = f"{MITRE_BASE}/{year}/{bucket}xxx/{cve_id}.json"
     sess = session or requests.Session()

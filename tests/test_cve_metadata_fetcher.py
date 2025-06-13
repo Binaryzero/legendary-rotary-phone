@@ -156,14 +156,15 @@ def test_parse_cve_handles_missing_lists():
 
 
 def test_fetch_cve_returns_none_on_failure():
-    with patch("cve_metadata_fetcher.requests.get") as mock_get:
-        mock_get.side_effect = Exception("fail")
+    with patch("cve_metadata_fetcher.requests.Session") as mock_session:
+        mock_instance = mock_session.return_value
+        mock_instance.get.side_effect = Exception("fail")
         assert fetch_cve("CVE-0000-0000") is None
 
 def test_fetch_cve_invalid_format_ignored():
-    with patch("cve_metadata_fetcher.requests.get") as mock_get:
+    with patch("cve_metadata_fetcher.requests.Session") as mock_session:
         assert fetch_cve("BADFORMAT") is None
-        mock_get.assert_not_called()
+        mock_session.assert_not_called()
 
 
 def test_create_report_runs(tmp_path, monkeypatch):
