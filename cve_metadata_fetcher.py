@@ -105,7 +105,7 @@ def parse_cve(cve_json: dict) -> CveMetadata:
     cvss, vector = find_cvss()
 
     cwe_items = []
-    for container in [cna] + list(containers.get("adp", [])):
+    for container in [cna] + containers.get("adp", []):
         for pt in container.get("problemTypes", []):
             for desc_entry in pt.get("descriptions", []):
                 cwe_id = desc_entry.get("cweId")
