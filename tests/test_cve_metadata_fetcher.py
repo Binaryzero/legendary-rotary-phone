@@ -7,17 +7,6 @@ from pathlib import Path
 
 import types
 
-sys.modules.setdefault(
-    "requests", types.SimpleNamespace(RequestException=Exception, get=lambda *a, **k: None)
-)
-sys.modules.setdefault("docx", types.SimpleNamespace(Document=lambda *a, **k: None))
-sys.modules.setdefault("openpyxl", types.SimpleNamespace(Workbook=lambda *a, **k: None))
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from cve_metadata_fetcher import CveMetadata, fetch_cve, parse_cve, main
-
-
 SAMPLE_JSON = {
     "containers": {
         "cna": {
@@ -37,7 +26,6 @@ SAMPLE_JSON = {
         }
     }
 }
-
 NESTED_JSON = {
     "containers": {
         "adp": [
@@ -54,7 +42,6 @@ NESTED_JSON = {
         "cna": {}
     }
 }
-
 
 def test_parse_cve_extracts_fields():
     parsed = parse_cve(SAMPLE_JSON)
@@ -79,7 +66,6 @@ def test_fetch_cve_invalid_format_ignored():
     with patch("cve_metadata_fetcher.requests.get") as mock_get:
         assert fetch_cve("BADFORMAT") is None
         mock_get.assert_not_called()
-
 
 def test_parse_cve_handles_nested_metrics_and_cwe():
     parsed = parse_cve(NESTED_JSON)
@@ -126,4 +112,3 @@ def test_main_allows_skipping_reports(tmp_path):
         assert not mock_report.called
         assert wb.saved == str(tmp_path / "out.xlsx")
         assert wb.active.rows
-

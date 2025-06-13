@@ -152,6 +152,7 @@ def parse_cve(cve_json: dict) -> CveMetadata:
 
 
 def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports")) -> None:
+
     """Generate a Word report based on the template.
 
     Parameters
@@ -160,8 +161,10 @@ def create_report(cve_id: str, meta: CveMetadata, out_dir: Path = Path("reports"
         Identifier for the CVE.
     meta:
         Parsed metadata dataclass returned by :func:`parse_cve`.
+
     out_dir:
         Directory where the generated report will be saved.
+
     """
     from docx import Document
 
@@ -206,6 +209,7 @@ def main(
     reports_dir: Path = Path("reports"),
     generate_reports: bool = True,
 ) -> None:
+
     """Read CVE IDs, fetch their metadata and save results to Excel."""
     if not input_file.exists():
         logging.error("Missing %s input file.", input_file)
