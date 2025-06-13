@@ -20,13 +20,14 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 
 ## Usage
 1. Populate `cves.txt` with one CVE ID per line
-2. Run the script:
+2. Run the script (optional flags shown with defaults):
 ```
 pip install requests openpyxl python-docx
-python cve_metadata_fetcher.py
+python cve_metadata_fetcher.py [cves.txt] --excel CVE_Results.xlsx \
+    --template CVE_Report_Template.docx --reports reports
 ```
-3. Open `CVE_Results.xlsx` for the research summary
-4. Review generated reports in the `reports/` folder for each CVE
+3. Open the Excel output for the research summary
+4. Review generated reports in the chosen reports directory
 
 ## Testing
 This project uses `pytest` to run the unit tests located in the `tests/`
