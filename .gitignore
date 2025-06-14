@@ -206,3 +206,4 @@ archive/*
 excessive-docs/*
 generated-outputs/*
 test_type_fixes/*
+.vscode/settings.json
