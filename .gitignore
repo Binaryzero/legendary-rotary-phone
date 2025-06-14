@@ -149,3 +149,4 @@ bandit-report.json
 # Temporary files
 *.tmp
 *.temp
+archive/*
