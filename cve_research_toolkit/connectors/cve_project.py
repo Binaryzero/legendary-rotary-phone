@@ -76,8 +76,8 @@ class CVEProjectConnector(DataSourceConnector):
                         error_text = await response.text()
                         if error_text:
                             logger.debug(f"Error response for {cve_id}: {error_text[:200]}")
-                    except:
-                        pass
+                    except Exception as text_exc:
+                        logger.debug(f"Error getting text from error response for {cve_id}: {text_exc}")
                     return {}
                     
         except ClientError as e:

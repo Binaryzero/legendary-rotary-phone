@@ -6,6 +6,7 @@ Provides click-based CLI for multi-source vulnerability intelligence research.
 
 import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -151,7 +152,6 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
     output_path.mkdir(exist_ok=True)
     
     # Export in requested formats
-    from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     for fmt in format:
@@ -182,7 +182,11 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
     console.print(f"- Total CVEs analyzed: {len(research_results)}")
     console.print(f"- CVEs with public exploits: {sum(1 for rd in research_results if rd.exploits)}")
     console.print(f"- CVEs in CISA KEV: {sum(1 for rd in research_results if rd.threat.in_kev)}")
-    console.print(f"- Average CVSS score: {sum(rd.cvss_score for rd in research_results) / len(research_results):.1f}")
+    if research_results:
+        avg_cvss = sum(rd.cvss_score for rd in research_results) / len(research_results)
+        console.print(f"- Average CVSS score: {avg_cvss:.1f}")
+    else:
+        console.print("- Average CVSS score: N/A")
     console.print(f"- Threat intelligence coverage: {sum(1 for rd in research_results if rd.threat.epss_score or rd.threat.in_kev)}/{len(research_results)} CVEs")
 
 
