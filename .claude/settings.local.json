@@ -13,7 +13,15 @@
       "Bash(jq:*)",
       "Bash(rmdir:*)",
       "Bash(mkdir:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git checkout:*)",
+      "Bash(rg:*)",
+      "Bash(bash:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

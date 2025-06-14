@@ -1,0 +1,66 @@
+[
+  {
+    "cve_id": "CVE-2021-44228",
+    "description": "Log4j RCE vulnerability",
+    "cvss_score": 10.0,
+    "cvss_vector": "",
+    "severity": "CRITICAL",
+    "published_date": "2021-12-09T00:00:00",
+    "last_modified": null,
+    "references": [],
+    "exploits": [],
+    "exploit_maturity": "unproven",
+    "weakness": {
+      "cwe_ids": [],
+      "capec_ids": [],
+      "attack_techniques": [],
+      "attack_tactics": []
+    },
+    "threat": {
+      "in_kev": true,
+      "epss_score": null,
+      "epss_percentile": null,
+      "has_metasploit": false,
+      "has_nuclei": false,
+      "actively_exploited": false,
+      "ransomware_campaign": false,
+      "vedas_score": null
+    },
+    "cpe_affected": [],
+    "vendor_advisories": [],
+    "patches": [],
+    "last_enriched": null
+  },
+  {
+    "cve_id": "CVE-2023-23397",
+    "description": "Outlook privilege escalation",
+    "cvss_score": 9.8,
+    "cvss_vector": "",
+    "severity": "CRITICAL",
+    "published_date": "2023-03-14T00:00:00",
+    "last_modified": null,
+    "references": [],
+    "exploits": [],
+    "exploit_maturity": "unproven",
+    "weakness": {
+      "cwe_ids": [],
+      "capec_ids": [],
+      "attack_techniques": [],
+      "attack_tactics": []
+    },
+    "threat": {
+      "in_kev": false,
+      "epss_score": null,
+      "epss_percentile": null,
+      "has_metasploit": false,
+      "has_nuclei": false,
+      "actively_exploited": false,
+      "ransomware_campaign": false,
+      "vedas_score": null
+    },
+    "cpe_affected": [],
+    "vendor_advisories": [],
+    "patches": [],
+    "last_enriched": null
+  }
+]

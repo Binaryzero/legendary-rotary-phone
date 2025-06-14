@@ -1,2 +1,7 @@
-- Always update and run tests after changes then document that
+- Always update and run tests after changes then document that you did so
+- Always document the changes you made in the code
+- Always ensure that the code is type checked before committing
+- Always ensure that the code is linted before committing
+- Always ensure that the code is formatted before committing
+- Always ensure that the code is tested before committing
 - Always test and type check after every change
