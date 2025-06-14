@@ -5,12 +5,15 @@ import logging
 from typing import Any, Dict
 
 try:
-    from aiohttp import ClientError, ContentTypeError
+    from aiohttp import ClientError, ContentTypeError, ClientResponseError
 except ImportError:
     ClientError = Exception
     ContentTypeError = Exception
+    ClientResponseError = Exception
 
 from .base import DataSourceConnector
+from ..exceptions import NetworkError, ParseError, RateLimitError
+from ..utils.retry import async_retry, RetryConfig
 
 logger = logging.getLogger(__name__)
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
@@ -28,70 +31,134 @@ class CVEProjectConnector(DataSourceConnector):
         }
     
     async def fetch(self, cve_id: str, session: Any) -> Dict[str, Any]:
-        """Fetch from MITRE CVE repository with robust error handling."""
+        """Fetch from MITRE CVE repository with robust error handling and retry logic."""
+        # Validate CVE ID format
+        parts = cve_id.split("-")
+        if len(parts) != 3:
+            raise ParseError(f"Invalid CVE ID format: {cve_id}", cve_id=cve_id, source="CVEProject")
+        
+        year = parts[1]
         try:
-            parts = cve_id.split("-")
-            if len(parts) != 3:
-                logger.error(f"Invalid CVE ID format: {cve_id}")
-                return {}
-            
-            year = parts[1]
-            try:
-                cve_number = int(parts[2])
-                bucket = cve_number // 1000
-            except ValueError:
-                logger.error(f"Invalid CVE number in {cve_id}")
-                return {}
-            
-            url = f"{GITHUB_RAW_BASE}/CVEProject/cvelistV5/main/cves/{year}/{bucket}xxx/{cve_id}.json"
-            logger.debug(f"Fetching CVE data from: {url}")
-            
+            cve_number = int(parts[2])
+            bucket = cve_number // 1000
+        except ValueError:
+            raise ParseError(f"Invalid CVE number in {cve_id}", cve_id=cve_id, source="CVEProject")
+        
+        url = f"{GITHUB_RAW_BASE}/CVEProject/cvelistV5/main/cves/{year}/{bucket}xxx/{cve_id}.json"
+        
+        # Configure retry for this specific source
+        retry_config = RetryConfig(
+            max_attempts=3,
+            base_delay=1.0,
+            max_delay=30.0
+        )
+        
+        return await async_retry(
+            self._fetch_with_session,
+            session, url, cve_id,
+            config=retry_config
+        )
+    
+    async def _fetch_with_session(self, session: Any, url: str, cve_id: str) -> Dict[str, Any]:
+        """Internal fetch method with session handling."""
+        logger.debug(f"Fetching CVE data from: {url}")
+        
+        try:
             async with session.get(url, headers=self.headers) as response:
-                if response.status == 200:
-                    # GitHub raw API returns JSON with text/plain content-type
-                    # We need to handle this by parsing text as JSON manually
-                    try:
-                        # First try the normal JSON parsing (in case GitHub fixes their MIME type)
-                        return await response.json()  # type: ignore
-                    except ContentTypeError:
-                        # Fallback: parse text content as JSON
-                        logger.debug(f"Content-Type issue for {cve_id}, parsing text as JSON")
-                        text_content = await response.text()
-                        if text_content.strip():
-                            try:
-                                return json.loads(text_content)  # type: ignore
-                            except json.JSONDecodeError as json_error:
-                                logger.error(f"Failed to parse JSON for {cve_id}: {json_error}")
-                                return {}
-                        else:
-                            logger.warning(f"Empty response for {cve_id}")
-                            return {}
-                elif response.status == 404:
+                # Handle rate limiting
+                if response.status == 429:
+                    retry_after = int(response.headers.get('Retry-After', 60))
+                    raise RateLimitError(
+                        f"Rate limited by CVEProject",
+                        retry_after=retry_after,
+                        cve_id=cve_id,
+                        source="CVEProject"
+                    )
+                
+                # Handle client/server errors
+                if response.status >= 500:
+                    raise NetworkError(
+                        f"Server error from CVEProject: HTTP {response.status}",
+                        status_code=response.status,
+                        cve_id=cve_id,
+                        source="CVEProject"
+                    )
+                
+                if response.status == 404:
                     logger.info(f"CVE {cve_id} not found in CVEProject repository (404)")
                     return {}
-                else:
-                    logger.warning(f"Failed to fetch {cve_id} from CVEProject: HTTP {response.status}")
-                    # Try to get error details
+                
+                if response.status >= 400:
+                    error_text = ""
                     try:
                         error_text = await response.text()
-                        if error_text:
-                            logger.debug(f"Error response for {cve_id}: {error_text[:200]}")
-                    except Exception as text_exc:
-                        logger.debug(f"Error getting text from error response for {cve_id}: {text_exc}")
-                    return {}
+                    except Exception:
+                        pass
                     
+                    raise NetworkError(
+                        f"Client error from CVEProject: HTTP {response.status} - {error_text[:200]}",
+                        status_code=response.status,
+                        cve_id=cve_id,
+                        source="CVEProject"
+                    )
+                
+                if response.status == 200:
+                    return await self._parse_response(response, cve_id)
+                
+                # Unexpected status
+                raise NetworkError(
+                    f"Unexpected response status: {response.status}",
+                    status_code=response.status,
+                    cve_id=cve_id,
+                    source="CVEProject"
+                )
+                
         except ClientError as e:
-            logger.error(f"Network error fetching {cve_id} from CVEProject: {e}")
-            return {}
-        except Exception as e:
-            logger.error(f"Unexpected error fetching {cve_id} from CVEProject: {type(e).__name__}: {e}")
-            return {}
+            raise NetworkError(
+                f"Network error fetching {cve_id} from CVEProject: {e}",
+                cve_id=cve_id,
+                source="CVEProject"
+            )
+    
+    async def _parse_response(self, response: Any, cve_id: str) -> Dict[str, Any]:
+        """Parse response with proper error handling."""
+        try:
+            # First try the normal JSON parsing
+            return await response.json()
+        except ContentTypeError:
+            # GitHub raw API returns JSON with text/plain content-type
+            logger.debug(f"Content-Type issue for {cve_id}, parsing text as JSON")
+            text_content = await response.text()
+            
+            if not text_content.strip():
+                logger.warning(f"Empty response for {cve_id}")
+                return {}
+            
+            try:
+                return json.loads(text_content)
+            except json.JSONDecodeError as json_error:
+                raise ParseError(
+                    f"Failed to parse JSON for {cve_id}: {json_error}",
+                    cve_id=cve_id,
+                    source="CVEProject"
+                )
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse CVE JSON 5.x format."""
+        """Parse CVE JSON 5.x format with enhanced error handling."""
         if not data:
             return {}
         
+        try:
+            return self._parse_cve_data(cve_id, data)
+        except Exception as e:
+            raise ParseError(
+                f"Failed to parse CVE data: {e}",
+                cve_id=cve_id,
+                source="CVEProject"
+            )
+    
+    def _parse_cve_data(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal parsing logic with detailed error context."""
         containers = data.get("containers", {})
         cna = containers.get("cna", {})
         

@@ -15,9 +15,11 @@ __author__ = "CVE Research Team"
 from .core.engine import VulnerabilityResearchEngine
 from .models.data import ResearchData
 from .reporting.generator import ResearchReportGenerator
+from . import exceptions
 
 __all__ = [
     "VulnerabilityResearchEngine",
     "ResearchData",
-    "ResearchReportGenerator"
+    "ResearchReportGenerator",
+    "exceptions"
 ]
