@@ -92,6 +92,34 @@ GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 
 console = Console()
 
+# Session-based cache for performance optimization (no persistence)
+@dataclass
+class SessionCache:
+    """In-memory cache for a single research session (no persistence)."""
+    epss_data: Dict[str, Any] = field(default_factory=dict)
+    cvss_bt_data: Dict[str, Any] = field(default_factory=dict)
+    cve_data: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # Avoid duplicate CVE fetches
+    session_stats: Dict[str, int] = field(default_factory=lambda: {
+        "cache_hits": 0,
+        "api_calls": 0,
+        "duplicate_cves": 0
+    })
+    
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Get session cache performance statistics."""
+        return self.session_stats.copy()
+    
+    def clear(self) -> None:
+        """Clear all session cache data."""
+        self.epss_data.clear()
+        self.cvss_bt_data.clear() 
+        self.cve_data.clear()
+        self.session_stats = {
+            "cache_hits": 0,
+            "api_calls": 0,
+            "duplicate_cves": 0
+        }
+
 # Configure logging
 if RICH_AVAILABLE and RichHandler is not None:
     logging.basicConfig(
@@ -640,9 +668,21 @@ class ThreatContextConnector(DataSourceConnector):
         }
         self.epss_cache: Dict[str, Any] = {}
         self.cache_loaded = False
+        self.session_cache: Optional[SessionCache] = None
+    
+    def set_session_cache(self, session_cache: SessionCache) -> None:
+        """Set session cache for performance optimization."""
+        self.session_cache = session_cache
     
     async def _load_epss_data(self, session: Any) -> None:
         """Load EPSS data from ARPSyndicate/cve-scores GitHub repo."""
+        # Check session cache first
+        if self.session_cache and self.session_cache.epss_data:
+            self.epss_cache = self.session_cache.epss_data
+            self.cache_loaded = True
+            logger.debug("Using session-cached EPSS data")
+            return
+        
         if self.cache_loaded:
             return
             
@@ -667,6 +707,12 @@ class ThreatContextConnector(DataSourceConnector):
                     
                     self.epss_cache = epss_data
                     self.cache_loaded = True
+                    
+                    # Store in session cache for other CVEs in this batch
+                    if self.session_cache:
+                        self.session_cache.epss_data = epss_data
+                        self.session_cache.session_stats["api_calls"] += 1
+                    
                     logger.debug(f"Loaded EPSS data for {len(epss_data)} CVEs")
                 else:
                     logger.warning(f"Failed to load EPSS data: HTTP {response.status}")
@@ -714,9 +760,21 @@ class CVSSBTConnector(DataSourceConnector):
         }
         self.cvss_cache: Dict[str, Any] = {}
         self.cache_loaded = False
+        self.session_cache: Optional[SessionCache] = None
+    
+    def set_session_cache(self, session_cache: SessionCache) -> None:
+        """Set session cache for performance optimization."""
+        self.session_cache = session_cache
     
     async def _load_cvss_data(self, session: Any) -> None:
         """Load CVSS data from t0sche/cvss-bt GitHub repo."""
+        # Check session cache first
+        if self.session_cache and self.session_cache.cvss_bt_data:
+            self.cvss_cache = self.session_cache.cvss_bt_data
+            self.cache_loaded = True
+            logger.debug("Using session-cached CVSS-BT data")
+            return
+            
         if self.cache_loaded:
             return
             
@@ -758,6 +816,12 @@ class CVSSBTConnector(DataSourceConnector):
                             }
                     
                     self.cache_loaded = True
+                    
+                    # Store in session cache for other CVEs in this batch
+                    if self.session_cache:
+                        self.session_cache.cvss_bt_data = self.cvss_cache.copy()
+                        self.session_cache.session_stats["api_calls"] += 1
+                    
                     logger.debug(f"Loaded CVSS-BT data for {len(self.cvss_cache)} CVEs")
                 else:
                     logger.warning(f"Failed to load CVSS-BT data: HTTP {response.status}")
@@ -940,6 +1004,9 @@ class VulnerabilityResearchEngine:
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
         
+        # Session-based cache for performance optimization (cleared after each session)
+        self.session_cache = SessionCache()
+        
         # Initialize connectors in correct layer order
         self.connectors = {
             DataLayer.FOUNDATIONAL: CVEProjectConnector(),           # Layer 1: CVEProject/cvelistV5
@@ -952,10 +1019,24 @@ class VulnerabilityResearchEngine:
         # Additional Layer 4 connector for CVSS-BT data
         self.cvss_bt_connector = CVSSBTConnector()
         
+        # Inject session cache into connectors that can benefit from it
+        if hasattr(self.connectors[DataLayer.THREAT_CONTEXT], 'set_session_cache'):
+            self.connectors[DataLayer.THREAT_CONTEXT].set_session_cache(self.session_cache)
+        if hasattr(self.cvss_bt_connector, 'set_session_cache'):
+            self.cvss_bt_connector.set_session_cache(self.session_cache)
+        
         
     
     async def research_cve(self, cve_id: str) -> ResearchData:
         """Perform comprehensive research on a CVE."""
+        # Check session cache for duplicate CVE processing
+        if cve_id in self.session_cache.cve_data:
+            self.session_cache.session_stats["cache_hits"] += 1
+            self.session_cache.session_stats["duplicate_cves"] += 1
+            logger.debug(f"Using cached data for {cve_id}")
+            cached_results = self.session_cache.cve_data[cve_id]
+            return self._build_research_data(cve_id, cached_results)
+        
         # Fetch from all sources concurrently
         if not AIOHTTP_AVAILABLE:
             logger.error("aiohttp is required for CVE research. Install with: pip install aiohttp")
@@ -1048,10 +1129,12 @@ class VulnerabilityResearchEngine:
         # Build ResearchData object
         research_data = self._build_research_data(cve_id, results)
         
+        # Cache results for potential duplicate CVEs in this session
+        self.session_cache.cve_data[cve_id] = results
+        
         # Log if no CVSS score found
         if research_data.cvss_score == 0.0 and research_data.description:
             logger.warning(f"No CVSS score available for {cve_id} from GitHub sources")
-        
         
         return research_data
     
@@ -1223,7 +1306,16 @@ class VulnerabilityResearchEngine:
     
     
     async def research_batch(self, cve_ids: List[str]) -> List[ResearchData]:
-        """Research multiple CVEs concurrently."""
+        """Research multiple CVEs concurrently with session-based optimization."""
+        # Clear session cache at start of new batch
+        self.session_cache.clear()
+        
+        # Deduplicate CVE IDs to avoid redundant work
+        unique_cve_ids = list(dict.fromkeys(cve_ids))  # Preserves order
+        duplicates_removed = len(cve_ids) - len(unique_cve_ids)
+        if duplicates_removed > 0:
+            logger.info(f"Removed {duplicates_removed} duplicate CVE IDs from batch")
+        
         results = []
         
         # Use semaphore to limit concurrent requests
@@ -1233,8 +1325,8 @@ class VulnerabilityResearchEngine:
             async with semaphore:
                 return await self.research_cve(cve_id)
         
-        # Create tasks
-        tasks = [research_with_limit(cve_id) for cve_id in cve_ids]
+        # Create tasks for unique CVE IDs
+        tasks = [research_with_limit(cve_id) for cve_id in unique_cve_ids]
         
         # Execute with progress tracking
         if RICH_AVAILABLE:
@@ -1248,8 +1340,8 @@ class VulnerabilityResearchEngine:
             ) as progress:
                 
                 task_id = progress.add_task(
-                    f"Researching {len(cve_ids)} CVEs...",
-                    total=len(cve_ids)
+                    f"Researching {len(unique_cve_ids)} CVEs...",
+                    total=len(unique_cve_ids)
                 )
                 
                 for coro in asyncio.as_completed(tasks):
@@ -1262,7 +1354,25 @@ class VulnerabilityResearchEngine:
                 result = await coro
                 results.append(result)
                 if i % 10 == 0:
-                    print(f"Progress: {i}/{len(cve_ids)} CVEs processed")
+                    print(f"Progress: {i}/{len(unique_cve_ids)} CVEs processed")
+        
+        # Log session cache performance statistics
+        cache_stats = self.session_cache.get_cache_stats()
+        if cache_stats["cache_hits"] > 0 or cache_stats["api_calls"] > 0:
+            logger.info(f"Session performance - Cache hits: {cache_stats['cache_hits']}, "
+                       f"API calls saved: {cache_stats['duplicate_cves']}, "
+                       f"Data loads: {cache_stats['api_calls']}")
+        
+        # Handle original order for duplicate CVEs
+        if duplicates_removed > 0:
+            # Create a mapping of results for quick lookup
+            result_map = {rd.cve_id: rd for rd in results}
+            # Rebuild results in original order, reusing data for duplicates
+            ordered_results = []
+            for cve_id in cve_ids:
+                if cve_id in result_map:
+                    ordered_results.append(result_map[cve_id])
+            return ordered_results
         
         return results
 
@@ -1491,6 +1601,8 @@ class ResearchReportGenerator:
             self._export_markdown(research_data, output_path)
         elif format == "excel":
             self._export_excel(research_data, output_path)
+        elif format == "webui":
+            self._export_webui_json(research_data, output_path)
     
     def _export_json(self, data: List[ResearchData], path: Path) -> None:
         """Export to JSON format."""
@@ -1500,6 +1612,63 @@ class ResearchReportGenerator:
             json.dump(json_data, f, indent=2, default=str)
         
         console.print(f"[green]✓[/green] Research data exported to {path}")
+    
+    def _export_webui_json(self, data: List[ResearchData], path: Path) -> None:
+        """Export to JSON format optimized for Web UI consumption."""
+        webui_data = []
+        
+        for rd in data:
+            webui_record = {
+                'cve_id': rd.cve_id,
+                'description': rd.description,
+                'cvss_score': rd.cvss_score,
+                'severity': rd.severity,
+                'published_date': rd.published_date.isoformat() if rd.published_date else None,
+                'last_modified': rd.last_modified.isoformat() if rd.last_modified else None,
+                
+                # MITRE Framework data
+                'weakness': {
+                    'cwe_ids': rd.weakness.cwe_ids,
+                    'capec_ids': rd.weakness.capec_ids,
+                    'attack_techniques': rd.weakness.attack_techniques,
+                    'attack_tactics': rd.weakness.attack_tactics
+                },
+                
+                # Threat intelligence
+                'threat': {
+                    'in_kev': rd.threat.in_kev,
+                    'epss_score': rd.threat.epss_score,
+                    'epss_percentile': rd.threat.epss_percentile,
+                    'actively_exploited': rd.threat.actively_exploited,
+                    'has_metasploit': rd.threat.has_metasploit,
+                    'has_nuclei': rd.threat.has_nuclei
+                },
+                
+                # Exploits
+                'exploits': [
+                    {
+                        'url': exploit.url,
+                        'source': exploit.source,
+                        'type': exploit.type
+                    } for exploit in rd.exploits
+                ],
+                'exploit_maturity': rd.exploit_maturity,
+                
+                # Remediation
+                'vendor_advisories': rd.vendor_advisories,
+                'patches': rd.patches,
+                'references': rd.references,
+                
+                # Metadata
+                'last_enriched': rd.last_enriched.isoformat() if rd.last_enriched else None
+            }
+            webui_data.append(webui_record)
+        
+        with open(path, 'w') as f:
+            json.dump(webui_data, f, indent=2, default=str)
+        
+        console.print(f"[green]✓[/green] Web UI data exported to {path}")
+        console.print(f"[cyan]💡 Start the web UI with: python3 cve_research_ui.py --data-file {path}[/cyan]")
     
     def _research_data_to_dict(self, rd: ResearchData) -> Dict[str, Any]:
         """Convert ResearchData to dictionary for JSON export."""
@@ -1814,7 +1983,7 @@ def cli_main() -> None:
     @click.command()
     @click.argument('input_file', type=click.Path(exists=True), default='cves.txt')
     @click.option('--format', '-f', multiple=True, 
-                  type=click.Choice(['json', 'csv', 'markdown', 'excel']),
+                  type=click.Choice(['json', 'csv', 'markdown', 'excel', 'webui']),
                   default=['markdown'], help='Output format(s)')
     @click.option('--output-dir', '-o', default='research_output', 
                   help='Output directory for reports')

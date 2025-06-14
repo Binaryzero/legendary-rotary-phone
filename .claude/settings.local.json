@@ -13,7 +13,14 @@
       "Bash(jq:*)",
       "Bash(rmdir:*)",
       "Bash(mkdir:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(PYTHONPATH=/Users/william/Tools/legendary-rotary-phone python3 tests/test_research_comprehensive.py)",
+      "Bash(PYTHONPATH:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
