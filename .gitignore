@@ -196,3 +196,13 @@ cython_debug/
 ~$*
 reports/*
 CVE_Results.xlsx
+
+# CVE Research Toolkit output files
+research_output/
+test_*.txt
+detailed_reports_*/
+.pre-commit-config.yaml
+archive/*
+excessive-docs/*
+generated-outputs/*
+test_type_fixes/*

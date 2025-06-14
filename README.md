@@ -16,18 +16,23 @@ This kit is designed for **researching and documenting all vulnerabilities**, no
 - Detects: fixed/upgrade versions if available
 - Extracts: mitigation guidance and advisory references
 - Outputs results to Excel with structured columns and batch naming
-- Generates individual Word reports for each CVE in the `reports/` directory
-- Word report generation can be disabled with the `--skip-docs` flag
+- Maps CVSS base score to severity tiers (None/Low/Medium/High/Critical) (inspired by https://github.com/t0sche/cvss-bt)
+- Word report generation is **off by default**; use `--reports` to enable per-CVE Word reports in the `reports/` directory
+- All CVEs from the input file are processed; missing metadata yields blank fields (no CVEs are skipped due to missing data)
 
 ## Usage
 1. Populate `cves.txt` with one CVE ID per line
-2. Run the script (optional flags shown with defaults):
+2. Run the script (optional flags shown with defaults; reports off by default):
 ```
 pip install requests openpyxl python-docx
-python cve_metadata_fetcher.py --output results.xlsx
+python cve_metadata_fetcher.py --output results.xlsx --reports
 ```
 3. Open the output file (default `CVE_Results.xlsx`, or as specified by `--output`) for the research summary
-4. Review generated reports in the directory given by `--reports-dir` unless `--skip-reports` was used
+4. Review generated reports in the directory given by `--reports-dir` if `--reports` was specified
+
+## Data Dictionary
+
+For detailed definitions of each Excel column, see [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
 ## Testing
 This project uses `pytest` to run the unit tests located in the `tests/`

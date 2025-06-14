@@ -1,10 +1,28 @@
-from unittest.mock import patch
-
-import pytest
-
 import sys
 from pathlib import Path
 import types
+
+import pytest
+from unittest.mock import patch
+
+# dynamically load the module under test, so it can be imported below
+fetcher = types.ModuleType("cve_metadata_fetcher")
+module_path = Path(__file__).parent.parent / "cve_metadata_fetcher.py"
+exec(module_path.read_text(), fetcher.__dict__)
+sys.modules["cve_metadata_fetcher"] = fetcher
+
+from cve_metadata_fetcher import parse_cve, CveMetadata, fetch_cve, main
+
+LEGACY_JSON = {
+    "containers": {
+        "cna": {
+            "x_legacyV4Record": {
+                "description": {"description_data": [{"value": "Legacy desc"}]},
+                "problemtype": {"problemtype_data": [{"description": [{"value": "CWE-123"}]}]},
+            }
+        }
+    }
+}
 
 SAMPLE_JSON = {
     "containers": {
@@ -54,14 +72,17 @@ def test_parse_cve_extracts_fields():
     assert parsed.fix_version == "https://example.com/patch"
     assert parsed.mitigations == "https://vendor.com/advisories/123"
     assert parsed.affected == "Acme App 1.0"
+    assert parsed.severity == "Medium"
+    # CVSS v3 metric breakdown
+    assert parsed.attack_vector == "N"
+    assert parsed.attack_complexity == "L"
+    assert parsed.privileges_required == "N"
+    assert parsed.user_interaction == "N"
+    assert parsed.scope == "U"
+    assert parsed.impact_confidentiality == "N"
+    assert parsed.impact_integrity == "N"
+    assert parsed.impact_availability == "N"
 
-    fetcher.main(
-        input_file,
-        excel_out=tmp_path / "out.xlsx",
-        template_path=tmp_path / "template.docx",
-        report_dir=tmp_path / "reports",
-        write_reports=False,
-    )
 
 def test_fetch_cve_returns_none_on_failure():
     with patch("cve_metadata_fetcher.requests.get") as mock_get:
@@ -78,6 +99,26 @@ def test_parse_cve_handles_nested_metrics_and_cwe():
     assert parsed.cvss == 8.8
     assert parsed.vector == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
     assert parsed.cwe == "CWE-123 Sample CWE description"
+    assert parsed.severity == "High"
+    # CVSS v3 nested metric breakdown
+    assert parsed.attack_vector == "N"
+    assert parsed.attack_complexity == "L"
+    assert parsed.privileges_required == "N"
+    assert parsed.user_interaction == "N"
+    assert parsed.scope == "U"
+    assert parsed.impact_confidentiality == "H"
+    assert parsed.impact_integrity == "H"
+    assert parsed.impact_availability == "H"
+
+def test_parse_legacy_v4_record():
+    parsed = parse_cve(LEGACY_JSON)
+    assert isinstance(parsed, CveMetadata)
+    assert parsed.description == "Legacy desc"
+    assert parsed.cvss == ""
+    assert parsed.vector == ""
+    assert parsed.severity == ""
+    assert parsed.cwe == "CWE-123"
+    assert parsed.severity == "High"
 
 
 class DummySheet:
@@ -116,4 +157,29 @@ def test_main_allows_skipping_reports(tmp_path):
         )
         assert not mock_report.called
         assert wb.saved == str(tmp_path / "out.xlsx")
-        assert wb.active.rows
+        # Verify header columns align with data breakdown
+        expected_header = [
+            "CVE ID", "Description", "CVSS", "Severity",
+            "Attack Vector", "Attack Complexity", "Privileges Required",
+            "User Interaction", "Scope", "Confidentiality Impact",
+            "Integrity Impact", "Availability Impact", "Vector",
+            "CWE", "Exploit", "ExploitRefs", "FixVersion",
+            "Mitigations", "Affected", "References",
+        ]
+        header_row = wb.active.rows[0]
+        assert header_row == expected_header
+        # Check a data row matches the parsed SAMPLE_JSON values
+        data_row = wb.active.rows[1]
+        assert data_row[0] == "CVE-1234-0001"
+        assert data_row[2] == 5.0
+        assert data_row[3] == "Medium"
+        assert data_row[4] == "N"
+        assert data_row[5] == "L"
+        assert data_row[6] == "N"
+        assert data_row[7] == "N"
+        assert data_row[8] == "U"
+        assert data_row[9] == "N"
+        assert data_row[10] == "N"
+        assert data_row[11] == "N"
+        assert data_row[12] == "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N"
+        # CWE is "CWE-79", next fields tested elsewhere

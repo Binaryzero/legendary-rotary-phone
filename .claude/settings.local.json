@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test:*)",
+      "Bash(mv:*)",
+      "Bash(ls:*)",
+      "Bash(./scripts/type-check.sh:*)",
+      "Bash(mypy:*)",
+      "Bash(make:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(grep:*)",
+      "Bash(jq:*)",
+      "Bash(rmdir:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,2 @@
+- Always update and run tests after changes then document that
+- Always test and type check after every change
