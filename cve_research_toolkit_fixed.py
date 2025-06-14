@@ -313,12 +313,69 @@ class CVEProjectConnector(DataSourceConnector):
                 if cvss_score > 0:
                     break
         
-        # Extract references
+        # Extract CWE information
+        cwe_ids = []
+        cwe_descriptions = []
+        
+        # Check CNA problemTypes for CWE data
+        for problem_type in cna.get("problemTypes", []):
+            for desc in problem_type.get("descriptions", []):
+                if desc.get("type") == "CWE" and desc.get("cweId"):
+                    cwe_id = desc.get("cweId", "")
+                    cwe_desc = desc.get("description", "")
+                    if cwe_id and cwe_id not in cwe_ids:
+                        cwe_ids.append(cwe_id)
+                        if cwe_desc:
+                            cwe_descriptions.append(f"{cwe_id}: {cwe_desc}")
+        
+        # Also check ADP entries for additional CWE data
+        for adp in containers.get("adp", []):
+            for problem_type in adp.get("problemTypes", []):
+                for desc in problem_type.get("descriptions", []):
+                    if desc.get("type") == "CWE" and desc.get("cweId"):
+                        cwe_id = desc.get("cweId", "")
+                        cwe_desc = desc.get("description", "")
+                        if cwe_id and cwe_id not in cwe_ids:
+                            cwe_ids.append(cwe_id)
+                            if cwe_desc:
+                                cwe_descriptions.append(f"{cwe_id}: {cwe_desc}")
+        
+        # Extract references and categorize them
         references = []
+        fix_versions = []
+        mitigations = []
+        vendor_advisories = []
+        patches = []
+        
         for ref in cna.get("references", []):
             url = ref.get("url", "")
-            if url:
-                references.append(url)
+            if not url:
+                continue
+                
+            references.append(url)
+            
+            # Categorize references based on tags and URL patterns
+            tags = ref.get("tags", [])
+            url_lower = url.lower()
+            
+            # Identify fix/upgrade references
+            if any(tag in ["patch", "vendor-advisory", "fix", "upgrade"] for tag in tags):
+                if "patch" in tags or "fix" in tags:
+                    patches.append(url)
+                elif "upgrade" in tags or "vendor-advisory" in tags:
+                    fix_versions.append(url)
+                    vendor_advisories.append(url)
+            
+            # Pattern-based categorization for untagged references
+            elif any(pattern in url_lower for pattern in ["security-advisories", "advisory", "bulletin", "alert"]):
+                vendor_advisories.append(url)
+            elif any(pattern in url_lower for pattern in ["patch", "fix", "update", "upgrade", "release-notes"]):
+                if "patch" in url_lower or "fix" in url_lower:
+                    patches.append(url)
+                else:
+                    fix_versions.append(url)
+            elif any(pattern in url_lower for pattern in ["mitigation", "workaround", "guidance"]):
+                mitigations.append(url)
         
         # Extract dates
         metadata = data.get("cveMetadata", {})
@@ -329,7 +386,13 @@ class CVEProjectConnector(DataSourceConnector):
             "description": description,
             "cvss_score": cvss_score,
             "cvss_vector": cvss_vector,
+            "cwe_ids": cwe_ids,
+            "cwe_descriptions": cwe_descriptions,
             "references": references,
+            "fix_versions": fix_versions,
+            "mitigations": mitigations,
+            "vendor_advisories": vendor_advisories,
+            "patches": patches,
             "published_date": published,
             "last_modified": modified
         }
@@ -486,12 +549,84 @@ class MITREConnector(DataSourceConnector):
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Parse MITRE ATT&CK and CAPEC mappings."""
-        # Placeholder for MITRE parsing
+        # Basic CWE-to-CAPEC mapping for common vulnerability types
+        cwe_to_capec_mapping = {
+            "CWE-79": ["CAPEC-106", "CAPEC-63", "CAPEC-209"],  # XSS
+            "CWE-89": ["CAPEC-66", "CAPEC-7", "CAPEC-108"],    # SQL Injection
+            "CWE-22": ["CAPEC-126", "CAPEC-139", "CAPEC-64"],  # Path Traversal
+            "CWE-78": ["CAPEC-88", "CAPEC-43"],                # OS Command Injection
+            "CWE-94": ["CAPEC-35", "CAPEC-242"],               # Code Injection
+            "CWE-352": ["CAPEC-62"],                           # CSRF
+            "CWE-434": ["CAPEC-1", "CAPEC-17"],               # File Upload
+            "CWE-611": ["CAPEC-201", "CAPEC-230"],             # XXE
+            "CWE-502": ["CAPEC-586"],                          # Deserialization
+            "CWE-287": ["CAPEC-115", "CAPEC-49"],              # Authentication Bypass
+            "CWE-306": ["CAPEC-114"],                          # Missing Authentication
+            "CWE-200": ["CAPEC-118", "CAPEC-116"],             # Information Disclosure
+            "CWE-269": ["CAPEC-122", "CAPEC-470"],             # Privilege Escalation
+            "CWE-119": ["CAPEC-100", "CAPEC-14"],              # Buffer Overflow
+            "CWE-120": ["CAPEC-100", "CAPEC-123"],             # Buffer Copy
+            "CWE-125": ["CAPEC-540"],                          # Out-of-bounds Read
+            "CWE-787": ["CAPEC-540"],                          # Out-of-bounds Write
+        }
+        
+        # Basic CAPEC-to-ATT&CK tactics mapping
+        capec_to_tactics_mapping = {
+            "CAPEC-106": ["TA0001"],  # Initial Access (XSS)
+            "CAPEC-63": ["TA0001"],   # Initial Access (XSS)
+            "CAPEC-66": ["TA0001"],   # Initial Access (SQL Injection)
+            "CAPEC-7": ["TA0001"],    # Initial Access (SQL Injection)
+            "CAPEC-88": ["TA0002"],   # Execution (Command Injection)
+            "CAPEC-43": ["TA0002"],   # Execution (Command Injection)
+            "CAPEC-35": ["TA0002"],   # Execution (Code Injection)
+            "CAPEC-122": ["TA0004"],  # Privilege Escalation
+            "CAPEC-470": ["TA0004"],  # Privilege Escalation
+            "CAPEC-118": ["TA0007"],  # Discovery (Info Disclosure)
+            "CAPEC-116": ["TA0010"],  # Exfiltration (Info Disclosure)
+            "CAPEC-100": ["TA0040"],  # Impact (Buffer Overflow)
+        }
+        
+        # ATT&CK technique mapping
+        capec_to_techniques_mapping = {
+            "CAPEC-106": ["T1059", "T1203"],  # XSS -> Command Line, Exploitation
+            "CAPEC-66": ["T1190"],            # SQL Injection -> Exploit Public App
+            "CAPEC-88": ["T1059"],            # Command Injection -> Command Line
+            "CAPEC-35": ["T1203"],            # Code Injection -> Exploitation
+            "CAPEC-122": ["T1068"],           # Privilege Escalation -> Exploit
+            "CAPEC-118": ["T1083"],           # Info Disclosure -> File Discovery
+            "CAPEC-100": ["T1068"],           # Buffer Overflow -> Exploit
+        }
+        
+        # Extract CWE data from foundational layer if available
+        cwe_data = data.get("foundational_cwe", [])
+        
+        capec_ids = []
+        attack_techniques = []
+        attack_tactics = []
+        
+        # Map CWE to CAPEC and ATT&CK
+        for cwe_id in cwe_data:
+            if cwe_id in cwe_to_capec_mapping:
+                capec_list = cwe_to_capec_mapping[cwe_id]
+                capec_ids.extend(capec_list)
+                
+                # Map CAPEC to ATT&CK
+                for capec_id in capec_list:
+                    if capec_id in capec_to_tactics_mapping:
+                        attack_tactics.extend(capec_to_tactics_mapping[capec_id])
+                    if capec_id in capec_to_techniques_mapping:
+                        attack_techniques.extend(capec_to_techniques_mapping[capec_id])
+        
+        # Remove duplicates
+        capec_ids = list(set(capec_ids))
+        attack_techniques = list(set(attack_techniques))
+        attack_tactics = list(set(attack_tactics))
+        
         return {
-            "cwe_ids": [],
-            "capec_ids": [],
-            "attack_techniques": [],
-            "attack_tactics": []
+            "cwe_ids": cwe_data,
+            "capec_ids": capec_ids,
+            "attack_techniques": attack_techniques,
+            "attack_tactics": attack_tactics
         }
 
 
@@ -841,22 +976,13 @@ class VulnerabilityResearchEngine:
             # Gather all results with detailed status tracking
             results = {}
             source_status = {}
+            raw_data = {}
             
+            # First, collect all the raw data
             for layer, task in tasks:
                 try:
                     data = await task
-                    if isinstance(layer, str) and layer == "cvss_bt":
-                        parsed = self.cvss_bt_connector.parse(cve_id, data)
-                        # Merge CVSS-BT data into THREAT_CONTEXT (Layer 4)
-                        if DataLayer.THREAT_CONTEXT not in results:
-                            results[DataLayer.THREAT_CONTEXT] = {}
-                        if "cvss_bt" not in results[DataLayer.THREAT_CONTEXT]:
-                            results[DataLayer.THREAT_CONTEXT]["cvss_bt"] = {}
-                        results[DataLayer.THREAT_CONTEXT]["cvss_bt"].update(parsed)
-                    elif isinstance(layer, DataLayer):
-                        parsed = self.connectors[layer].parse(cve_id, data)
-                        results[layer] = parsed
-                    
+                    raw_data[layer] = data
                     # Track source availability
                     if data:
                         source_status[layer] = "success"
@@ -866,21 +992,53 @@ class VulnerabilityResearchEngine:
                         source_status[layer] = "no_data"
                         layer_name = getattr(layer, 'name', str(layer))
                         logger.debug(f"No data available from {layer_name} for {cve_id}")
-                        
                 except Exception as e:
                     layer_name = getattr(layer, 'name', str(layer))
-                    # Only log as debug for expected failures like missing data
                     if "AttributeError" in str(type(e).__name__) and layer_name == "RAW_INTELLIGENCE":
                         logger.debug(f"Patrowl data not available for {cve_id}")
                     else:
-                        logger.warning(f"Error fetching {layer_name} data for {cve_id}: {type(e).__name__}: {e}")
-                    if isinstance(layer, str) and layer == "cvss_bt":
-                        if DataLayer.THREAT_CONTEXT not in results:
-                            results[DataLayer.THREAT_CONTEXT] = {}
-                        results[DataLayer.THREAT_CONTEXT].update({"cvss_bt": {}})
-                    elif isinstance(layer, DataLayer):
-                        results[layer] = {}
+                        logger.debug(f"Error fetching {layer_name} data for {cve_id}: {e}")
                     source_status[layer] = "error"
+                    raw_data[layer] = {}
+            
+            # Process data in layer order to ensure dependencies
+            layer_order = [DataLayer.FOUNDATIONAL, DataLayer.EXPLOIT_MECHANICS, DataLayer.WEAKNESS_TACTICS, DataLayer.THREAT_CONTEXT, DataLayer.RAW_INTELLIGENCE]
+            
+            for layer in layer_order:
+                if layer in raw_data:
+                    try:
+                        data = raw_data[layer]
+                        # Special handling for MITRE connector to pass CWE data from foundational layer
+                        if layer == DataLayer.WEAKNESS_TACTICS and DataLayer.FOUNDATIONAL in results:
+                            foundational_data = results[DataLayer.FOUNDATIONAL]
+                            cwe_data = foundational_data.get("cwe_ids", [])
+                            # Pass CWE data to MITRE connector for mapping
+                            data_with_cwe = dict(data) if data else {}
+                            data_with_cwe["foundational_cwe"] = cwe_data
+                            parsed = self.connectors[layer].parse(cve_id, data_with_cwe)
+                        else:
+                            parsed = self.connectors[layer].parse(cve_id, data)
+                        results[layer] = parsed
+                    except Exception as e:
+                        logger.debug(f"Error parsing {layer.name} data for {cve_id}: {e}")
+                        results[layer] = {}
+            
+            # Handle CVSS-BT separately
+            if "cvss_bt" in raw_data:
+                try:
+                    data = raw_data["cvss_bt"]
+                    parsed = self.cvss_bt_connector.parse(cve_id, data)
+                    # Merge CVSS-BT data into THREAT_CONTEXT (Layer 4)
+                    if DataLayer.THREAT_CONTEXT not in results:
+                        results[DataLayer.THREAT_CONTEXT] = {}
+                    if "cvss_bt" not in results[DataLayer.THREAT_CONTEXT]:
+                        results[DataLayer.THREAT_CONTEXT]["cvss_bt"] = {}
+                    results[DataLayer.THREAT_CONTEXT]["cvss_bt"].update(parsed)
+                except Exception as e:
+                    logger.debug(f"Error parsing CVSS-BT data for {cve_id}: {e}")
+                    if DataLayer.THREAT_CONTEXT not in results:
+                        results[DataLayer.THREAT_CONTEXT] = {}
+                    results[DataLayer.THREAT_CONTEXT]["cvss_bt"] = {}
             
             # Log overall source availability
             successful_sources = sum(1 for status in source_status.values() if status == "success")
@@ -1016,16 +1174,33 @@ class VulnerabilityResearchEngine:
         # Merge threat data from Layer 4 sources (Real-World Context)
         research_data.threat.in_kev = cvss_bt_threat_data.get("in_kev", epss_threat_data.get("in_kev", False))
         research_data.threat.epss_score = epss_threat_data.get("epss_score") or cvss_bt_threat_data.get("epss_score")
+        research_data.threat.epss_percentile = epss_threat_data.get("epss_percentile") or cvss_bt_threat_data.get("epss_percentile")
         research_data.threat.actively_exploited = cvss_bt_threat_data.get("in_kev", epss_threat_data.get("actively_exploited", False))
         research_data.threat.has_metasploit = cvss_bt_threat_data.get("has_metasploit", False)
         research_data.threat.has_nuclei = False  # Would come from other sources
         
-        # Add weakness data with fallback
+        # Add weakness data with fallback to foundational data
         weakness_data = results.get(DataLayer.WEAKNESS_TACTICS, {})
         if weakness_data.get("cwe_ids"):
             research_data.weakness.cwe_ids = weakness_data["cwe_ids"]
+        elif foundational.get("cwe_ids"):
+            # Use CWE data extracted from CVE Project if MITRE data not available
+            research_data.weakness.cwe_ids = foundational["cwe_ids"]
+            
+        if weakness_data.get("capec_ids"):
+            research_data.weakness.capec_ids = weakness_data["capec_ids"]
+            
         if weakness_data.get("attack_techniques"):
             research_data.weakness.attack_techniques = weakness_data["attack_techniques"]
+            
+        if weakness_data.get("attack_tactics"):
+            research_data.weakness.attack_tactics = weakness_data["attack_tactics"]
+        
+        # Populate additional fields from foundational CVE Project data
+        if foundational.get("vendor_advisories"):
+            research_data.vendor_advisories.extend(foundational["vendor_advisories"])
+        if foundational.get("patches"):
+            research_data.patches.extend(foundational["patches"])
         
         research_data.last_enriched = datetime.now()
         

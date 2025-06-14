@@ -203,6 +203,9 @@ cve_research_toolkit/
 ### **Recent Updates**:
 - Recovered .gitignore file and cleaned up project junk files
 - Maintained comprehensive documentation and todo tracking
+- **Enhanced Data Extraction (2025-06-14)**: Addressed empty CSV columns through comprehensive MITRE framework integration and data categorization
+  - Phase 1: CVE Project connector enhancements for CWE extraction and reference categorization
+  - Phase 2: Complete MITRE framework integration with CWE→CAPEC→ATT&CK systematic mapping for 17 vulnerability types
 
 ## Metrics
 - **Code Coverage**: Not measured (no tests)
