@@ -14,13 +14,19 @@
       "Bash(rmdir:*)",
       "Bash(mkdir:*)",
       "Bash(find:*)",
-      "Bash(PYTHONPATH=/Users/william/Tools/legendary-rotary-phone python3 tests/test_research_comprehensive.py)",
-      "Bash(PYTHONPATH:*)",
-      "mcp__ide__getDiagnostics",
-      "Bash(pip install:*)",
-      "Bash(curl:*)",
-      "Bash(pkill:*)",
-      "Bash(git add:*)"
+      "WebFetch(domain:github.com)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git checkout:*)",
+      "Bash(rg:*)",
+      "Bash(bash:*)",
+      "Bash(rm:*)",
+      "Bash(git commit:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)",
+      "Bash(git pull:*)",
+      "Bash(PYTHONPATH=/Users/william/Tools/legendary-rotary-phone python3 tests/test_error_handling.py)"
     ],
     "deny": []
   }
