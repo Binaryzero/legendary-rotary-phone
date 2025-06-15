@@ -23,7 +23,23 @@ interface CVEData {
   patches: string[];
   weakness: {
     cwe_ids: string[];
+    capec_ids: string[];
     attack_techniques: string[];
+    attack_tactics: string[];
+    kill_chain_phases: string[];
+  };
+  enhanced_problem_type: {
+    primary_weakness: string;
+    secondary_weaknesses: string;
+    vulnerability_categories: string;
+    impact_types: string;
+    attack_vectors: string;
+    enhanced_cwe_details: string;
+  };
+  control_mappings: {
+    applicable_controls_count: string;
+    control_categories: string;
+    top_controls: string;
   };
 }
 
@@ -77,7 +93,9 @@ const App: React.FC = () => {
     threat: true,
     exploits: false,
     patches: false,
+    enhanced_problem_type: false,
     mitre: false,
+    controls: false,
     technical: false
   });
 
@@ -141,6 +159,59 @@ const App: React.FC = () => {
       type: 'numericColumn',
       valueFormatter: (params: any) => 
         params.value ? params.value.toFixed(3) : 'N/A'
+    },
+    {
+      field: 'enhanced_problem_type.primary_weakness',
+      headerName: 'Primary Weakness',
+      width: 150,
+      cellRenderer: (params: any) => params.value || 'N/A'
+    },
+    {
+      field: 'enhanced_problem_type.vulnerability_categories',
+      headerName: 'Vuln Categories',
+      width: 180,
+      cellRenderer: (params: any) => (
+        <div className="categories-cell" title={params.value}>
+          {params.value || 'N/A'}
+        </div>
+      )
+    },
+    {
+      field: 'enhanced_problem_type.impact_types',
+      headerName: 'Impact Types',
+      width: 150,
+      cellRenderer: (params: any) => (
+        <div className="impact-cell" title={params.value}>
+          {params.value || 'N/A'}
+        </div>
+      )
+    },
+    {
+      field: 'enhanced_problem_type.attack_vectors',
+      headerName: 'Attack Vectors',
+      width: 140,
+      cellRenderer: (params: any) => (
+        <div className="vectors-cell" title={params.value}>
+          {params.value || 'N/A'}
+        </div>
+      )
+    },
+    {
+      field: 'control_mappings.applicable_controls_count',
+      headerName: 'Controls Count',
+      width: 120,
+      type: 'numericColumn',
+      cellRenderer: (params: any) => params.value || '0'
+    },
+    {
+      field: 'control_mappings.control_categories',
+      headerName: 'Control Categories',
+      width: 200,
+      cellRenderer: (params: any) => (
+        <div className="control-categories-cell" title={params.value}>
+          {params.value || 'N/A'}
+        </div>
+      )
     },
     {
       field: 'description',
@@ -572,6 +643,47 @@ const App: React.FC = () => {
                   )}
                 </div>
 
+                {/* Enhanced Problem Type Section */}
+                <div className="collapsible-section">
+                  <button 
+                    className="section-header"
+                    onClick={() => toggleSection('enhanced_problem_type')}
+                  >
+                    <span>Enhanced Problem Type Analysis</span>
+                    <span className={`expand-caret ${expandedSections.enhanced_problem_type ? 'expanded' : ''}`}>
+                      ▶
+                    </span>
+                  </button>
+                  {expandedSections.enhanced_problem_type && (
+                    <div className="section-content">
+                      <div className="field-row">
+                        <strong>Primary Weakness</strong>
+                        <span>{selectedCve.enhanced_problem_type?.primary_weakness || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Secondary Weaknesses</strong>
+                        <span>{selectedCve.enhanced_problem_type?.secondary_weaknesses || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Vulnerability Categories</strong>
+                        <span>{selectedCve.enhanced_problem_type?.vulnerability_categories || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Impact Types</strong>
+                        <span>{selectedCve.enhanced_problem_type?.impact_types || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Attack Vectors</strong>
+                        <span>{selectedCve.enhanced_problem_type?.attack_vectors || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Enhanced CWE Details</strong>
+                        <span>{selectedCve.enhanced_problem_type?.enhanced_cwe_details || 'N/A'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* MITRE Framework Section */}
                 <div className="collapsible-section">
                   <button 
@@ -590,8 +702,49 @@ const App: React.FC = () => {
                         <span>{selectedCve.weakness?.cwe_ids?.join(', ') || 'None'}</span>
                       </div>
                       <div className="field-row">
+                        <strong>CAPEC IDs</strong>
+                        <span>{selectedCve.weakness?.capec_ids?.join(', ') || 'None'}</span>
+                      </div>
+                      <div className="field-row">
                         <strong>ATT&CK Techniques</strong>
                         <span>{selectedCve.weakness?.attack_techniques?.join(', ') || 'None'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>ATT&CK Tactics</strong>
+                        <span>{selectedCve.weakness?.attack_tactics?.join(', ') || 'None'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Kill Chain Phases</strong>
+                        <span>{selectedCve.weakness?.kill_chain_phases?.join(', ') || 'None'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* NIST Control Mapping Section */}
+                <div className="collapsible-section">
+                  <button 
+                    className="section-header"
+                    onClick={() => toggleSection('controls')}
+                  >
+                    <span>NIST 800-53 Control Mapping ({selectedCve.control_mappings?.applicable_controls_count || '0'} controls)</span>
+                    <span className={`expand-caret ${expandedSections.controls ? 'expanded' : ''}`}>
+                      ▶
+                    </span>
+                  </button>
+                  {expandedSections.controls && (
+                    <div className="section-content">
+                      <div className="field-row">
+                        <strong>Applicable Controls Count</strong>
+                        <span>{selectedCve.control_mappings?.applicable_controls_count || '0'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Control Categories</strong>
+                        <span>{selectedCve.control_mappings?.control_categories || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Top Recommended Controls</strong>
+                        <span>{selectedCve.control_mappings?.top_controls || 'N/A'}</span>
                       </div>
                     </div>
                   )}
