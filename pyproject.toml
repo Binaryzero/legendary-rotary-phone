@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cve-research-toolkit"
+version = "2.0.0"
+description = "Interactive Vulnerability Intelligence Platform"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "CVE Research Toolkit Team"}
+]
+keywords = ["cve", "vulnerability", "security", "osint", "research"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "aiohttp>=3.8.0",
+    "click>=8.0.0",
+]
+
+[project.optional-dependencies]
+ui = [
+    "rich>=12.0.0",
+]
+excel = [
+    "pandas>=1.3.0",
+    "openpyxl>=3.0.0",
+]
+yaml = [
+    "PyYAML>=6.0",
+]
+all = [
+    "rich>=12.0.0",
+    "pandas>=1.3.0",
+    "openpyxl>=3.0.0",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+cve-research = "cve_research_toolkit_fixed:cli_main"
+cve-webui = "start_webui:main"
+
+[project.urls]
+Homepage = "https://github.com/Binaryzero/legendary-rotary-phone"
+Repository = "https://github.com/Binaryzero/legendary-rotary-phone"
+Issues = "https://github.com/Binaryzero/legendary-rotary-phone/issues"
+
+[tool.setuptools]
+py-modules = [
+    "cve_research_toolkit_fixed",
+    "cve_research_ui", 
+    "start_webui"
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.txt", "*.yaml", "*.yml"]
+
+# Exclude development and output directories
+[tool.setuptools.packages.find]
+exclude = [
+    "archive*",
+    "research_output*", 
+    "test_exports*",
+    "tests*",
+    "scripts*",
+    ".*"
+]
