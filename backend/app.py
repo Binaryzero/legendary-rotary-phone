@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI(
-    title="CVE Research Toolkit API",
-    description="High-performance vulnerability intelligence API with advanced filtering and pagination",
+    title="ODIN API",
+    description="OSINT Data Intelligence Nexus - High-performance vulnerability intelligence API with advanced filtering and pagination",
     version="2.0.0"
 )
 
@@ -114,7 +114,12 @@ async def research_cves(request: CVEResearchRequest):
                     "epss_percentile": rd.threat.epss_percentile,
                     "actively_exploited": rd.threat.actively_exploited,
                     "has_metasploit": rd.threat.has_metasploit,
-                    "has_nuclei": rd.threat.has_nuclei
+                    "has_nuclei": rd.threat.has_nuclei,
+                    "ransomware_campaign": rd.threat.ransomware_campaign,
+                    "kev_vulnerability_name": rd.threat.kev_vulnerability_name,
+                    "kev_short_description": rd.threat.kev_short_description,
+                    "kev_vendor_project": rd.threat.kev_vendor_project,
+                    "kev_product": rd.threat.kev_product
                 },
                 "exploits": [{"url": exp.url, "source": exp.source, "type": exp.type} for exp in rd.exploits],
                 "exploit_maturity": rd.exploit_maturity,
@@ -332,6 +337,32 @@ async def clear_data():
     global research_data
     research_data = []
     return {"status": "success", "message": "All data cleared"}
+
+@app.post("/api/load-data")
+async def load_data(data: List[Dict[str, Any]]):
+    """Load research data directly (for JSON file uploads)."""
+    global research_data
+    
+    try:
+        # Validate the data structure
+        for item in data:
+            if not isinstance(item, dict) or 'cve_id' not in item:
+                raise HTTPException(status_code=400, detail="Invalid data format. Each item must have a 'cve_id' field.")
+        
+        # Clear existing data and load new data
+        research_data = data
+        
+        logger.info(f"Loaded {len(data)} CVEs from uploaded data")
+        
+        return {
+            "status": "success",
+            "loaded": len(data),
+            "message": f"Successfully loaded {len(data)} CVEs"
+        }
+    
+    except Exception as e:
+        logger.error(f"Data loading failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Data loading failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

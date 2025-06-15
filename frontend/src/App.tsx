@@ -17,7 +17,15 @@ interface CVEData {
   threat: {
     in_kev: boolean;
     epss_score: number | null;
+    epss_percentile: number | null;
     actively_exploited: boolean;
+    has_metasploit: boolean;
+    has_nuclei: boolean;
+    ransomware_campaign: boolean;
+    kev_vulnerability_name: string;
+    kev_short_description: string;
+    kev_vendor_project: string;
+    kev_product: string;
   };
   exploits: Array<{ url: string; source: string; type: string }>;
   patches: string[];
@@ -41,6 +49,11 @@ interface CVEData {
     control_categories: string;
     top_controls: string;
   };
+  exploit_maturity?: string;
+  cpe_affected?: string;
+  vendor_advisories?: string[];
+  references?: string[];
+  last_enriched?: string;
 }
 
 interface ApiResponse {
@@ -88,6 +101,7 @@ const App: React.FC = () => {
   const [selectedCve, setSelectedCve] = useState<CVEData | null>(null);
   const [selectedCveIndex, setSelectedCveIndex] = useState<number>(-1);
   const [pendingNavigation, setPendingNavigation] = useState<'first' | 'last' | null>(null);
+  const [uploadType, setUploadType] = useState<'json' | 'cve-list'>('cve-list');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     overview: true,
     threat: true,
@@ -96,6 +110,7 @@ const App: React.FC = () => {
     enhanced_problem_type: false,
     mitre: false,
     controls: false,
+    references: false,
     technical: false
   });
 
@@ -103,7 +118,7 @@ const App: React.FC = () => {
     {
       field: 'cve_id',
       headerName: 'CVE ID',
-      width: 150,
+      width: 160,
       pinned: 'left',
       cellRenderer: (params: any) => (
         <button 
@@ -155,21 +170,78 @@ const App: React.FC = () => {
     {
       field: 'threat.epss_score',
       headerName: 'EPSS',
-      width: 100,
+      width: 90,
       type: 'numericColumn',
       valueFormatter: (params: any) => 
         params.value ? params.value.toFixed(3) : 'N/A'
     },
     {
+      field: 'threat.epss_percentile',
+      headerName: 'EPSS %',
+      width: 80,
+      type: 'numericColumn',
+      valueFormatter: (params: any) => 
+        params.value ? `${(params.value * 100).toFixed(1)}%` : 'N/A'
+    },
+    {
+      field: 'exploit_maturity',
+      headerName: 'Maturity',
+      width: 110,
+      cellRenderer: (params: any) => {
+        const maturity = params.value || 'unproven';
+        const colorMap = {
+          weaponized: '#ef4444',
+          functional: '#f59e0b', 
+          poc: '#10b981',
+          unproven: '#6b7280'
+        };
+        return (
+          <span style={{ 
+            color: colorMap[maturity as keyof typeof colorMap] || '#6b7280',
+            fontWeight: '600',
+            textTransform: 'capitalize'
+          }}>
+            {maturity}
+          </span>
+        );
+      }
+    },
+    {
+      field: 'threat.has_metasploit',
+      headerName: 'MSF',
+      width: 70,
+      cellRenderer: (params: any) => (
+        <span style={{ 
+          color: params.value ? '#ef4444' : '#6b7280',
+          fontWeight: '600'
+        }}>
+          {params.value ? '●' : '○'}
+        </span>
+      )
+    },
+    {
+      field: 'threat.has_nuclei',
+      headerName: 'Nuclei',
+      width: 80,
+      cellRenderer: (params: any) => (
+        <span style={{ 
+          color: params.value ? '#f59e0b' : '#6b7280',
+          fontWeight: '600'
+        }}>
+          {params.value ? '●' : '○'}
+        </span>
+      )
+    },
+    {
       field: 'enhanced_problem_type.primary_weakness',
       headerName: 'Primary Weakness',
-      width: 150,
+      width: 180,
       cellRenderer: (params: any) => params.value || 'N/A'
     },
     {
       field: 'enhanced_problem_type.vulnerability_categories',
-      headerName: 'Vuln Categories',
-      width: 180,
+      headerName: 'Vulnerability Categories',
+      width: 200,
       cellRenderer: (params: any) => (
         <div className="categories-cell" title={params.value}>
           {params.value || 'N/A'}
@@ -179,7 +251,7 @@ const App: React.FC = () => {
     {
       field: 'enhanced_problem_type.impact_types',
       headerName: 'Impact Types',
-      width: 150,
+      width: 160,
       cellRenderer: (params: any) => (
         <div className="impact-cell" title={params.value}>
           {params.value || 'N/A'}
@@ -189,7 +261,7 @@ const App: React.FC = () => {
     {
       field: 'enhanced_problem_type.attack_vectors',
       headerName: 'Attack Vectors',
-      width: 140,
+      width: 150,
       cellRenderer: (params: any) => (
         <div className="vectors-cell" title={params.value}>
           {params.value || 'N/A'}
@@ -206,7 +278,7 @@ const App: React.FC = () => {
     {
       field: 'control_mappings.control_categories',
       headerName: 'Control Categories',
-      width: 200,
+      width: 180,
       cellRenderer: (params: any) => (
         <div className="control-categories-cell" title={params.value}>
           {params.value || 'N/A'}
@@ -343,10 +415,102 @@ const App: React.FC = () => {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      const fileContent = await file.text();
+
+      if (uploadType === 'json') {
+        // Load JSON data file directly into the UI
+        try {
+          const jsonData = JSON.parse(fileContent);
+          
+          // Check if it's the right format (array of CVE data or research data)
+          let dataToLoad = [];
+          if (Array.isArray(jsonData)) {
+            dataToLoad = jsonData;
+          } else if (jsonData.data && Array.isArray(jsonData.data)) {
+            dataToLoad = jsonData.data;
+          } else {
+            throw new Error('Invalid JSON format. Expected array of CVE data or API response format.');
+          }
+
+          // Use the backend API to load the data
+          await axios.post('/api/load-data', dataToLoad);
+          
+          // Refresh the UI with the loaded data
+          await fetchData();
+        } catch (parseError) {
+          alert('Error parsing JSON file: ' + (parseError as Error).message);
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Process CVE list file and research them
+        const cveIds = fileContent
+          .split(/[\n,\s]+/)
+          .map(id => id.trim())
+          .filter(id => id.match(/^CVE-\d{4}-\d+$/i))
+          .map(id => id.toUpperCase());
+
+        if (cveIds.length === 0) {
+          alert('No valid CVE IDs found in the file. Expected format: CVE-YYYY-NNNN');
+          setLoading(false);
+          return;
+        }
+
+        // Research the CVEs
+        const response = await axios.post('/api/research', { cve_ids: cveIds });
+        console.log('Research response:', response.data);
+        
+        // Refresh data after research
+        await fetchData();
+      }
+      
+      // Clear the file input
+      event.target.value = '';
+      
+    } catch (error) {
+      console.error('File upload failed:', error);
+      alert('File upload failed: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportData = () => {
+    if (rowData.length === 0) {
+      alert('No data to export. Research some CVEs first.');
+      return;
+    }
+
+    const exportData = {
+      timestamp: new Date().toISOString(),
+      summary: summary,
+      data: rowData
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `odin-research-data-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>CVE Research Toolkit</h1>
+        <h1>ODIN</h1>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '500', marginTop: '0.25rem' }}>
+          OSINT Data Intelligence Nexus
+        </div>
         <div className="header-stats">
           <span>Total: {summary.total_cves}</span>
           <span>Critical/High: {summary.critical_high}</span>
@@ -366,6 +530,93 @@ const App: React.FC = () => {
           <button onClick={handleResearch} disabled={loading}>
             {loading ? 'Researching...' : 'Research CVEs'}
           </button>
+        </div>
+
+        <div className="research-section" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '1rem' }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '1rem', 
+            marginBottom: '1rem',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem',
+              background: 'var(--bg-tertiary)',
+              padding: '0.5rem 1rem',
+              borderRadius: '6px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <span style={{ color: 'var(--text-primary)', fontWeight: '600', fontSize: '1rem' }}>Upload:</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="uploadType"
+                  value="cve-list"
+                  checked={uploadType === 'cve-list'}
+                  onChange={(e) => setUploadType(e.target.value as 'json' | 'cve-list')}
+                  style={{ marginRight: '0.25rem' }}
+                />
+                <span style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>CVE List (.txt)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="uploadType"
+                  value="json"
+                  checked={uploadType === 'json'}
+                  onChange={(e) => setUploadType(e.target.value as 'json' | 'cve-list')}
+                  style={{ marginRight: '0.25rem' }}
+                />
+                <span style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>JSON Data (.json)</span>
+              </label>
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '1rem'
+            }}>
+              <input
+                type="file"
+                accept={uploadType === 'json' ? '.json' : '.txt,.csv'}
+                onChange={handleFileUpload}
+                disabled={loading}
+                style={{ display: 'none' }}
+                id="file-upload"
+              />
+              <label 
+                htmlFor="file-upload"
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: loading ? 'var(--text-muted)' : 'var(--brand-secondary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  transition: 'background-color 0.2s ease'
+                }}
+              >
+                {loading ? 'Processing...' : `Upload ${uploadType === 'json' ? 'JSON File' : 'CVE List'}`}
+              </label>
+              
+              <div style={{ 
+                color: 'var(--text-muted)', 
+                fontSize: '0.9rem',
+                maxWidth: '300px',
+                lineHeight: '1.4'
+              }}>
+                {uploadType === 'json' 
+                  ? 'Load pre-generated ODIN research data'
+                  : 'Upload text file with CVE IDs (one per line or comma-separated)'
+                }
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="filters">
@@ -404,6 +655,25 @@ const App: React.FC = () => {
             <option value="true">Has Exploits</option>
             <option value="false">No Exploits</option>
           </select>
+
+          <button 
+            onClick={exportData}
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--brand-accent)',
+              color: 'var(--bg-primary)',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              transition: 'background-color 0.2s ease'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = 'var(--brand-accent-hover)'}
+            onMouseOut={(e) => e.currentTarget.style.background = 'var(--brand-accent)'}
+          >
+            Export JSON
+          </button>
 
           <button onClick={clearData} className="clear-btn">
             Clear All Data
@@ -566,6 +836,77 @@ const App: React.FC = () => {
                         <strong>Active Exploitation</strong>
                         <span>{selectedCve.threat.actively_exploited ? 'Yes' : 'No'}</span>
                       </div>
+                      <div className="field-row">
+                        <strong>EPSS Percentile</strong>
+                        <span>{selectedCve.threat.epss_percentile ? `${(selectedCve.threat.epss_percentile * 100).toFixed(1)}%` : 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Exploit Maturity</strong>
+                        <span style={{ 
+                          textTransform: 'capitalize',
+                          fontWeight: '600',
+                          color: selectedCve.exploit_maturity === 'weaponized' ? '#ef4444' : 
+                                 selectedCve.exploit_maturity === 'functional' ? '#f59e0b' :
+                                 selectedCve.exploit_maturity === 'poc' ? '#10b981' : 'inherit'
+                        }}>
+                          {selectedCve.exploit_maturity || 'Unproven'}
+                        </span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Has Metasploit Module</strong>
+                        <span style={{ 
+                          color: selectedCve.threat.has_metasploit ? '#ef4444' : 'inherit',
+                          fontWeight: selectedCve.threat.has_metasploit ? '600' : 'normal'
+                        }}>
+                          {selectedCve.threat.has_metasploit ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Has Nuclei Template</strong>
+                        <span style={{ 
+                          color: selectedCve.threat.has_nuclei ? '#f59e0b' : 'inherit',
+                          fontWeight: selectedCve.threat.has_nuclei ? '600' : 'normal'
+                        }}>
+                          {selectedCve.threat.has_nuclei ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div className="field-row">
+                        <strong>CPE Affected</strong>
+                        <span>{selectedCve.cpe_affected || 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>Last Enriched</strong>
+                        <span>{selectedCve.last_enriched ? new Date(selectedCve.last_enriched).toLocaleString() : 'N/A'}</span>
+                      </div>
+                      {selectedCve.threat.in_kev && (
+                        <>
+                          <div className="field-row">
+                            <strong>KEV Vulnerability Name</strong>
+                            <span>{selectedCve.threat.kev_vulnerability_name || 'N/A'}</span>
+                          </div>
+                          <div className="field-row">
+                            <strong>KEV Description</strong>
+                            <span>{selectedCve.threat.kev_short_description || 'N/A'}</span>
+                          </div>
+                          <div className="field-row">
+                            <strong>KEV Vendor/Project</strong>
+                            <span>{selectedCve.threat.kev_vendor_project || 'N/A'}</span>
+                          </div>
+                          <div className="field-row">
+                            <strong>KEV Product</strong>
+                            <span>{selectedCve.threat.kev_product || 'N/A'}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="field-row">
+                        <strong>Ransomware Campaign</strong>
+                        <span style={{ 
+                          color: selectedCve.threat.ransomware_campaign ? '#ff6b6b' : 'inherit',
+                          fontWeight: selectedCve.threat.ransomware_campaign ? '600' : 'normal'
+                        }}>
+                          {selectedCve.threat.ransomware_campaign ? 'Yes' : 'No'}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -584,32 +925,39 @@ const App: React.FC = () => {
                   {expandedSections.exploits && (
                     <div className="section-content">
                       {selectedCve.exploits?.length > 0 ? (
-                        <table className="exploits-table">
-                          <thead>
-                            <tr>
-                              <th>Type</th>
-                              <th>Source</th>
-                              <th>URL</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedCve.exploits.map((exploit, idx) => (
-                              <tr key={idx}>
-                                <td>
-                                  <span className="exploit-type">{exploit.type}</span>
-                                </td>
-                                <td>{exploit.source}</td>
-                                <td className="exploit-url-cell">
-                                  <a href={exploit.url} target="_blank" rel="noopener noreferrer" title={exploit.url}>
-                                    {exploit.url}
-                                  </a>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <>
+                          <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                            <strong style={{ color: 'var(--brand-secondary)', fontSize: '1.1rem' }}>Total Exploits: {selectedCve.exploits.length}</strong>
+                          </div>
+                          <div style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+                            <table className="exploits-table" style={{ margin: 0 }}>
+                              <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                                <tr>
+                                  <th>Type</th>
+                                  <th>Source</th>
+                                  <th>URL</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedCve.exploits.map((exploit, idx) => (
+                                  <tr key={idx}>
+                                    <td>
+                                      <span className="exploit-type">{exploit.type}</span>
+                                    </td>
+                                    <td style={{ fontSize: '1rem' }}>{exploit.source}</td>
+                                    <td className="exploit-url-cell">
+                                      <a href={exploit.url} target="_blank" rel="noopener noreferrer" title={exploit.url} style={{ fontSize: '1rem' }}>
+                                        {exploit.url}
+                                      </a>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
                       ) : (
-                        <p>No known exploits</p>
+                        <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>No known exploits for this CVE</p>
                       )}
                     </div>
                   )}
@@ -746,6 +1094,86 @@ const App: React.FC = () => {
                         <strong>Top Recommended Controls</strong>
                         <span>{selectedCve.control_mappings?.top_controls || 'N/A'}</span>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* References & Advisories Section */}
+                <div className="collapsible-section">
+                  <button 
+                    className="section-header"
+                    onClick={() => toggleSection('references')}
+                  >
+                    <span>References & Advisories</span>
+                    <span className={`expand-caret ${expandedSections.references ? 'expanded' : ''}`}>
+                      ▶
+                    </span>
+                  </button>
+                  {expandedSections.references && (
+                    <div className="section-content">
+                      {selectedCve.vendor_advisories && selectedCve.vendor_advisories.length > 0 && (
+                        <div className="field-row">
+                          <strong>Vendor Advisories</strong>
+                          <div>
+                            {selectedCve.vendor_advisories.map((advisory, index) => (
+                              <div key={index} style={{ marginBottom: '0.5rem' }}>
+                                <a 
+                                  href={advisory} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  style={{ color: 'var(--brand-secondary)', textDecoration: 'none' }}
+                                >
+                                  {advisory}
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCve.references && selectedCve.references.length > 0 && (
+                        <div className="field-row">
+                          <strong>Additional References</strong>
+                          <div>
+                            <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1rem' }}>
+                              {selectedCve.references.map((ref, index) => (
+                                <div key={index} style={{ marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: index < (selectedCve.references?.length || 0) - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                                  <a 
+                                    href={ref} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{ 
+                                      color: 'var(--brand-secondary)', 
+                                      textDecoration: 'none',
+                                      fontSize: '1rem',
+                                      lineHeight: '1.5',
+                                      wordBreak: 'break-all'
+                                    }}
+                                  >
+                                    {ref}
+                                  </a>
+                                </div>
+                              ))}
+                              <div style={{ 
+                                color: 'var(--text-muted)', 
+                                fontSize: '0.9rem', 
+                                fontStyle: 'italic',
+                                marginTop: '1rem',
+                                textAlign: 'center',
+                                padding: '0.5rem'
+                              }}>
+                                Total: {selectedCve.references?.length || 0} references
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {(!selectedCve.vendor_advisories || selectedCve.vendor_advisories.length === 0) && 
+                       (!selectedCve.references || selectedCve.references.length === 0) && (
+                        <div className="field-row">
+                          <strong>Status</strong>
+                          <span>No additional references available</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
