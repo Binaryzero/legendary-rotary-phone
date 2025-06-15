@@ -24,7 +24,10 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
       "Bash(cve-webui:*)",
-      "Bash(timeout 5 cve-webui:*)"
+      "Bash(timeout 5 cve-webui:*)",
+      "Bash(cve-dashboard:*)",
+      "Bash(timeout 3:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }

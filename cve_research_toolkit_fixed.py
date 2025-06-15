@@ -1611,7 +1611,7 @@ class ResearchReportGenerator:
         with open(path, 'w') as f:
             json.dump(json_data, f, indent=2, default=str)
         
-        console.print(f"[green]✓[/green] Research data exported to {path}")
+        console.print(f"[green]Research data exported to {path}[/green]")
     
     def _export_webui_json(self, data: List[ResearchData], path: Path) -> None:
         """Export to JSON format optimized for Web UI consumption."""
@@ -1667,8 +1667,8 @@ class ResearchReportGenerator:
         with open(path, 'w') as f:
             json.dump(webui_data, f, indent=2, default=str)
         
-        console.print(f"[green]✓[/green] Web UI data exported to {path}")
-        console.print(f"[cyan]💡 Start the web UI with: python3 cve_research_ui.py --data-file {path}[/cyan]")
+        console.print(f"[green]Web UI data exported to {path}[/green]")
+        console.print(f"[cyan]Start the web UI with: python3 cve_research_ui.py --data-file {path}[/cyan]")
     
     def _research_data_to_dict(self, rd: ResearchData) -> Dict[str, Any]:
         """Convert ResearchData to dictionary for JSON export."""
@@ -1795,7 +1795,7 @@ class ResearchReportGenerator:
         df = pd.DataFrame(rows)
         df.to_csv(path, index=False)
         
-        console.print(f"[green]✓[/green] Research data exported to {path}")
+        console.print(f"[green]Research data exported to {path}[/green]")
     
     def _export_markdown(self, data: List[ResearchData], path: Path) -> None:
         """Export detailed markdown reports."""
@@ -1877,7 +1877,7 @@ class ResearchReportGenerator:
                 
                 f.write("\n")
         
-        console.print(f"[green]✓[/green] Research report exported to {path}")
+        console.print(f"[green]Research report exported to {path}[/green]")
     
     def _export_excel(self, data: List[ResearchData], path: Path) -> None:
         """Export to Excel format with clean, relevant fields only."""
@@ -1966,7 +1966,7 @@ class ResearchReportGenerator:
             df.to_excel(path, index=False)
         else:
             print("Pandas not available for Excel export")
-        console.print(f"[green]✓[/green] Research data exported to {path}")
+        console.print(f"[green]Research data exported to {path}[/green]")
 
 
 def cli_main() -> None:
@@ -2085,7 +2085,7 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
             report_path = details_dir / f"{rd.cve_id}_report.md"
             report_path.write_text(report_content)
         
-        console.print(f"[green]✓[/green] Detailed reports saved to {details_dir}")
+        console.print(f"[green]Detailed reports saved to {details_dir}[/green]")
     
     # Show statistics
     console.print("\n[bold]Research Statistics:[/bold]")

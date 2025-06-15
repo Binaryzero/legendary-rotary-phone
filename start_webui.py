@@ -101,7 +101,7 @@ def start_with_research(args):
         import time
         webui_file = output_dir / f"webui_data_{Path().resolve().name}_{int(time.time())}.json"
         
-        print("⚙️  Running CVE research...")
+        print("Running CVE research...")
         main_research(
             input_file=str(args.research),
             format=['webui'],

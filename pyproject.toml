@@ -36,6 +36,11 @@ dependencies = [
 ui = [
     "rich>=12.0.0",
 ]
+streamlit = [
+    "streamlit>=1.28.0",
+    "plotly>=5.17.0",
+    "altair>=5.0.0",
+]
 excel = [
     "pandas>=1.3.0",
     "openpyxl>=3.0.0",
@@ -45,6 +50,9 @@ yaml = [
 ]
 all = [
     "rich>=12.0.0",
+    "streamlit>=1.28.0",
+    "plotly>=5.17.0",
+    "altair>=5.0.0",
     "pandas>=1.3.0",
     "openpyxl>=3.0.0",
     "PyYAML>=6.0",
@@ -53,6 +61,7 @@ all = [
 [project.scripts]
 cve-research = "cve_research_toolkit_fixed:cli_main"
 cve-webui = "start_webui:main"
+cve-dashboard = "launch_dashboard:main"
 
 [project.urls]
 Homepage = "https://github.com/Binaryzero/legendary-rotary-phone"
@@ -63,7 +72,9 @@ Issues = "https://github.com/Binaryzero/legendary-rotary-phone/issues"
 py-modules = [
     "cve_research_toolkit_fixed",
     "cve_research_ui", 
-    "start_webui"
+    "start_webui",
+    "streamlit_app",
+    "launch_dashboard"
 ]
 
 [tool.setuptools.package-data]
