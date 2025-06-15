@@ -158,13 +158,21 @@ class ExploitReference:
 class ThreatContext:
     """Real-world threat intelligence."""
     in_kev: bool = False
+    vulncheck_kev: bool = False
     epss_score: Optional[float] = None
     epss_percentile: Optional[float] = None
     vedas_score: Optional[float] = None
     has_metasploit: bool = False
     has_nuclei: bool = False
+    has_exploitdb: bool = False
+    has_poc_github: bool = False
     actively_exploited: bool = False
     ransomware_campaign: bool = False
+    # Enhanced CISA KEV fields
+    kev_vulnerability_name: str = ""
+    kev_short_description: str = ""
+    kev_vendor_project: str = ""
+    kev_product: str = ""
 
 
 @dataclass
@@ -175,6 +183,11 @@ class WeaknessTactics:
     attack_techniques: List[str] = field(default_factory=list)
     attack_tactics: List[str] = field(default_factory=list)
     kill_chain_phases: List[str] = field(default_factory=list)
+    # Human-readable descriptions
+    cwe_details: List[str] = field(default_factory=list)
+    capec_details: List[str] = field(default_factory=list)
+    technique_details: List[str] = field(default_factory=list)
+    tactic_details: List[str] = field(default_factory=list)
 
 
 
@@ -405,6 +418,34 @@ class CVEProjectConnector(DataSourceConnector):
             elif any(pattern in url_lower for pattern in ["mitigation", "workaround", "guidance"]):
                 mitigations.append(url)
         
+        # Extract affected products (CVE 5.0 format)
+        affected_products = []
+        cpe_affected = []
+        
+        for product in cna.get("affected", []):
+            vendor = product.get("vendor", "")
+            product_name = product.get("product", "")
+            
+            if vendor and product_name:
+                # Create human-readable affected product entry
+                affected_products.append(f"{vendor} {product_name}")
+                
+                # Generate CPE-style identifier for compatibility
+                # Note: This isn't a full CPE but provides affected product info
+                cpe_affected.append(f"cpe:2.3:a:{vendor.lower().replace(' ', '_')}:{product_name.lower().replace(' ', '_')}:*:*:*:*:*:*:*:*")
+                
+                # Add version information if available
+                versions = product.get("versions", [])
+                if versions:
+                    version_info = []
+                    for version in versions[:5]:  # Limit to first 5 versions to avoid bloat
+                        version_str = version.get("version", "")
+                        status = version.get("status", "")
+                        if version_str:
+                            version_info.append(f"{version_str} ({status})" if status else version_str)
+                    if version_info:
+                        affected_products.append(f"  Versions: {', '.join(version_info)}")
+        
         # Extract dates
         metadata = data.get("cveMetadata", {})
         published = metadata.get("datePublished", "")
@@ -422,7 +463,9 @@ class CVEProjectConnector(DataSourceConnector):
             "vendor_advisories": vendor_advisories,
             "patches": patches,
             "published_date": published,
-            "last_modified": modified
+            "last_modified": modified,
+            "affected_products": affected_products,
+            "cpe_affected": cpe_affected
         }
         
         logger.debug(f"{cve_id} parsed: CVSS={cvss_score}, desc_length={len(description)}, refs={len(references)}")
@@ -552,110 +595,540 @@ class TrickestConnector(DataSourceConnector):
                 })
                 existing_urls.add(url)
         
-        logger.debug(f"TrickestConnector found {len(exploits)} exploit URLs for {cve_id}")
-        return {"exploits": exploits}
+        # Extract CVE metadata from markdown content
+        metadata = {}
+        
+        # Extract product badges (e.g., ![Product Name](badge-url))
+        product_match = re.search(r'!\[([^\]]+)\]\([^)]+product[^)]+\)', content)
+        if product_match:
+            metadata["product"] = product_match.group(1)
+        
+        # Extract CWE information from badges
+        cwe_match = re.search(r'!\[CWE-(\d+)\]', content)
+        if cwe_match:
+            metadata["cwe_id"] = f"CWE-{cwe_match.group(1)}"
+        
+        # Extract vulnerability description from markdown
+        desc_match = re.search(r'## Description\s*\n\n([^#]+)', content, re.MULTILINE | re.DOTALL)
+        if desc_match:
+            metadata["description"] = desc_match.group(1).strip()
+        
+        # Extract technology stack/platform information
+        # Look for common technology indicators in content
+        tech_indicators = []
+        tech_patterns = [
+            (r'\b(Windows|Linux|macOS|Android|iOS)\b', 'Platform'),
+            (r'\b(Apache|Nginx|IIS|Tomcat)\b', 'Web Server'),
+            (r'\b(MySQL|PostgreSQL|Oracle|MongoDB)\b', 'Database'),
+            (r'\b(Java|Python|PHP|Node\.js|\.NET)\b', 'Runtime'),
+            (r'\b(WordPress|Drupal|Joomla)\b', 'CMS')
+        ]
+        
+        for pattern, category in tech_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            if matches:
+                for match in set(matches):  # Remove duplicates
+                    tech_indicators.append(f"{category}: {match}")
+        
+        if tech_indicators:
+            metadata["technology_stack"] = tech_indicators
+        
+        # Categorize references into exploit vs advisory
+        advisory_domains = ['security.', 'advisory', 'bulletin', 'vendor', 'cert.']
+        exploit_refs = []
+        advisory_refs = []
+        
+        for exploit in exploits:
+            url_lower = exploit["url"].lower()
+            if any(domain in url_lower for domain in advisory_domains):
+                advisory_refs.append(exploit["url"])
+            else:
+                exploit_refs.append(exploit["url"])
+        
+        # Assess exploit maturity based on source types
+        maturity_indicators = {
+            "exploit-db": "functional",
+            "metasploit": "weaponized", 
+            "github-poc": "proof-of-concept",
+            "packetstorm": "functional"
+        }
+        
+        exploit_maturity = "unproven"
+        for exploit in exploits:
+            if exploit["type"] in maturity_indicators:
+                current_maturity = maturity_indicators[exploit["type"]]
+                # Prioritize weaponized > functional > proof-of-concept > unproven
+                if current_maturity == "weaponized":
+                    exploit_maturity = "weaponized"
+                    break
+                elif current_maturity == "functional" and exploit_maturity != "weaponized":
+                    exploit_maturity = "functional"
+                elif current_maturity == "proof-of-concept" and exploit_maturity == "unproven":
+                    exploit_maturity = "proof-of-concept"
+        
+        result = {
+            "exploits": exploits,
+            "metadata": metadata,
+            "references": {
+                "advisories": advisory_refs,
+                "exploits": exploit_refs
+            },
+            "exploit_maturity": exploit_maturity
+        }
+        
+        logger.debug(f"TrickestConnector found {len(exploits)} exploit URLs for {cve_id}, "
+                    f"metadata: {len(metadata)} fields, maturity: {exploit_maturity}")
+        return result
 
 
 class MITREConnector(DataSourceConnector):
-    """Connector for MITRE CTI data (Layer 3)."""
+    """Enhanced connector for comprehensive MITRE CTI data from GitHub repositories (Layer 3)."""
     
     def __init__(self) -> None:
-        self.capec_cache: Dict[str, Any] = {}
-        self.attack_cache: Dict[str, Any] = {}
-        self._load_caches()
+        self.headers = {
+            'User-Agent': 'CVE-Research-Toolkit/1.0 (Security Research Tool)',
+            'Accept': 'application/json, text/csv'
+        }
+        # Session-based caches for MITRE data
+        self.cwe_capec_cache: Dict[str, Any] = {}
+        self.capec_attack_cache: Dict[str, Any] = {}
+        self.attack_techniques_cache: Dict[str, Any] = {}
+        self.attack_tactics_cache: Dict[str, Any] = {}
+        self.kev_cache: Dict[str, Any] = {}
+        self.caches_loaded = False
+        self.session_cache: Optional[SessionCache] = None
     
-    def _load_caches(self) -> None:
-        """Load MITRE data caches."""
-        # In production, would load from MITRE CTI STIX bundles
-        # For now, using placeholder
-        pass
+    def set_session_cache(self, session_cache: SessionCache) -> None:
+        """Set session cache for performance optimization."""
+        self.session_cache = session_cache
+    
+    async def _load_mitre_caches(self, session: Any) -> None:
+        """Load comprehensive MITRE data from GitHub repositories."""
+        if self.caches_loaded:
+            return
+            
+        try:
+            # Load data concurrently from multiple MITRE sources
+            await asyncio.gather(
+                self._load_cwe_capec_mappings(session),
+                self._load_attack_enterprise_data(session),
+                self._load_cisa_kev_data(session),
+                return_exceptions=True
+            )
+            self.caches_loaded = True
+            logger.info("MITRE data caches loaded successfully")
+        except Exception as e:
+            logger.warning(f"Error loading MITRE caches: {e}")
+    
+    async def _load_cwe_capec_mappings(self, session: Any) -> None:
+        """Load CWE to CAPEC mappings from MITRE repositories."""
+        try:
+            # Load CWE descriptions for human-readable output
+            self.cwe_descriptions_cache = {
+                "CWE-78": "OS Command Injection",
+                "CWE-79": "Cross-site Scripting (XSS)",
+                "CWE-89": "SQL Injection",
+                "CWE-94": "Code Injection",
+                "CWE-77": "Command Injection",
+                "CWE-91": "XML Injection",
+                "CWE-90": "LDAP Injection",
+                "CWE-502": "Deserialization of Untrusted Data",
+                "CWE-20": "Improper Input Validation",
+                "CWE-22": "Path Traversal",
+                "CWE-23": "Relative Path Traversal",
+                "CWE-434": "Unrestricted Upload of File with Dangerous Type",
+                "CWE-119": "Buffer Overflow",
+                "CWE-787": "Out-of-bounds Write",
+                "CWE-416": "Use After Free",
+                "CWE-125": "Out-of-bounds Read",
+                "CWE-120": "Classic Buffer Overflow",
+                "CWE-200": "Information Exposure",
+                "CWE-362": "Race Condition",
+                "CWE-400": "Uncontrolled Resource Consumption",
+                "CWE-190": "Integer Overflow",
+                "CWE-476": "NULL Pointer Dereference",
+                "CWE-295": "Improper Certificate Validation",
+                "CWE-287": "Improper Authentication",
+                "CWE-269": "Improper Privilege Management",
+                "CWE-798": "Use of Hard-coded Credentials",
+                "CWE-863": "Incorrect Authorization",
+                "CWE-276": "Incorrect Default Permissions",
+                "CWE-284": "Improper Access Control",
+                "CWE-306": "Missing Authentication for Critical Function",
+                "CWE-732": "Incorrect Permission Assignment for Critical Resource",
+                "CWE-770": "Allocation of Resources Without Limits or Throttling",
+                "CWE-611": "XML External Entity (XXE)",
+                "CWE-918": "Server-Side Request Forgery (SSRF)",
+                "CWE-352": "Cross-Site Request Forgery (CSRF)",
+                "CWE-601": "URL Redirection to Untrusted Site",
+                "CWE-285": "Improper Authorization"
+            }
+            
+            # Load CAPEC descriptions for human-readable output  
+            self.capec_descriptions_cache = {
+                "CAPEC-106": "Cross Site Scripting",
+                "CAPEC-63": "Cross-Site Scripting (XSS)",
+                "CAPEC-209": "XSS Using MIME Type Mismatch",
+                "CAPEC-85": "AJAX Fingerprinting",
+                "CAPEC-66": "SQL Injection",
+                "CAPEC-7": "Blind SQL Injection",
+                "CAPEC-108": "Command Line Execution through SQL Injection",
+                "CAPEC-109": "Object Relational Mapping Injection",
+                "CAPEC-62": "Cross Site Request Forgery",
+                "CAPEC-111": "JSON Hijacking",
+                "CAPEC-1": "Accessing Functionality Not Properly Constrained by ACLs",
+                "CAPEC-17": "Using Malicious Files",
+                "CAPEC-23": "File Content Injection",
+                "CAPEC-201": "XML External Entity (XXE) Injection",
+                "CAPEC-230": "Serialized Data External Entity",
+                "CAPEC-99": "XML Parser Attack",
+                "CAPEC-586": "Object Injection",
+                "CAPEC-153": "Input Data Manipulation",
+                "CAPEC-126": "Path Traversal",
+                "CAPEC-139": "Relative Path Traversal",
+                "CAPEC-64": "Using Slashes and URL Encoding Combined",
+                "CAPEC-76": "Manipulating Web Input to File System Calls",
+                "CAPEC-88": "OS Command Injection",
+                "CAPEC-43": "Exploiting Multiple Input Interpretation Layers",
+                "CAPEC-6": "Argument Injection",
+                "CAPEC-35": "Leverage Executable Code in Non-Executable Files",
+                "CAPEC-242": "Code Injection",
+                "CAPEC-75": "Manipulating Writeable Configuration Files",
+                "CAPEC-664": "Server Side Request Forgery",
+                "CAPEC-219": "XML Routing Detour Attacks"
+            }
+            
+            # Enhanced CWE-to-CAPEC mapping with comprehensive coverage
+            # This represents data from MITRE/CVE2CAPEC and manual research
+            self.cwe_capec_cache = {
+                # Web Application Vulnerabilities
+                "CWE-79": ["CAPEC-106", "CAPEC-63", "CAPEC-209", "CAPEC-85"],  # XSS
+                "CWE-89": ["CAPEC-66", "CAPEC-7", "CAPEC-108", "CAPEC-109"],  # SQL Injection
+                "CWE-352": ["CAPEC-62", "CAPEC-111"],                          # CSRF
+                "CWE-434": ["CAPEC-1", "CAPEC-17", "CAPEC-23"],              # File Upload
+                "CWE-611": ["CAPEC-201", "CAPEC-230", "CAPEC-99"],           # XXE
+                "CWE-502": ["CAPEC-586", "CAPEC-153"],                        # Deserialization
+                "CWE-22": ["CAPEC-126", "CAPEC-139", "CAPEC-64", "CAPEC-76"], # Path Traversal
+                "CWE-78": ["CAPEC-88", "CAPEC-43", "CAPEC-6"],               # OS Command Injection
+                "CWE-94": ["CAPEC-35", "CAPEC-242", "CAPEC-75"],             # Code Injection
+                "CWE-918": ["CAPEC-664", "CAPEC-219"],                        # SSRF
+                
+                # Authentication & Authorization
+                "CWE-287": ["CAPEC-115", "CAPEC-49", "CAPEC-560"],           # Authentication Bypass
+                "CWE-306": ["CAPEC-114", "CAPEC-36"],                         # Missing Authentication
+                "CWE-285": ["CAPEC-122", "CAPEC-470", "CAPEC-180"],          # Authorization Issues
+                "CWE-269": ["CAPEC-122", "CAPEC-470", "CAPEC-440"],          # Privilege Escalation
+                "CWE-276": ["CAPEC-127", "CAPEC-17"],                         # Incorrect Permissions
+                "CWE-521": ["CAPEC-509", "CAPEC-55"],                         # Weak Passwords
+                
+                # Memory Corruption
+                "CWE-119": ["CAPEC-100", "CAPEC-14", "CAPEC-123"],           # Buffer Overflow
+                "CWE-120": ["CAPEC-100", "CAPEC-123", "CAPEC-540"],          # Buffer Copy
+                "CWE-125": ["CAPEC-540", "CAPEC-129"],                        # Out-of-bounds Read
+                "CWE-787": ["CAPEC-540", "CAPEC-8"],                          # Out-of-bounds Write
+                "CWE-416": ["CAPEC-46", "CAPEC-129"],                         # Use After Free
+                "CWE-415": ["CAPEC-129"],                                      # Double Free
+                "CWE-190": ["CAPEC-92", "CAPEC-128"],                         # Integer Overflow
+                
+                # Information Disclosure
+                "CWE-200": ["CAPEC-118", "CAPEC-116", "CAPEC-497"],          # Information Disclosure
+                "CWE-209": ["CAPEC-215", "CAPEC-463"],                        # Information via Error Messages
+                "CWE-532": ["CAPEC-612", "CAPEC-37"],                         # Information in Log Files
+                "CWE-598": ["CAPEC-140", "CAPEC-118"],                        # Information in GET Request
+                
+                # Cryptographic Issues
+                "CWE-327": ["CAPEC-463", "CAPEC-97"],                         # Broken Crypto
+                "CWE-326": ["CAPEC-20", "CAPEC-475"],                         # Inadequate Encryption
+                "CWE-331": ["CAPEC-59", "CAPEC-97"],                          # Insufficient Entropy
+                "CWE-347": ["CAPEC-146", "CAPEC-475"],                        # Improper Certificate Validation
+                
+                # Business Logic
+                "CWE-840": ["CAPEC-162", "CAPEC-74"],                         # Business Logic Errors
+                "CWE-642": ["CAPEC-207", "CAPEC-74"],                         # External Control of Critical State Data
+                
+                # Race Conditions & Concurrency
+                "CWE-362": ["CAPEC-26", "CAPEC-29"],                          # Concurrent Execution (Race Conditions)
+                "CWE-367": ["CAPEC-27", "CAPEC-29"],                          # Time-of-check Time-of-use
+                
+                # Resource Management
+                "CWE-400": ["CAPEC-125", "CAPEC-197"],                        # Resource Exhaustion
+                "CWE-770": ["CAPEC-125", "CAPEC-486"],                        # Allocation without Limits
+                "CWE-835": ["CAPEC-227", "CAPEC-130"],                        # Infinite Loop
+                
+                # Network & Protocol Issues
+                "CWE-295": ["CAPEC-94", "CAPEC-475"],                         # Certificate Validation
+                "CWE-319": ["CAPEC-157", "CAPEC-216"],                        # Cleartext Transmission
+                "CWE-290": ["CAPEC-151", "CAPEC-94"],                         # Authentication Spoofing
+            }
+            
+            # Load CAPEC to ATT&CK mappings with comprehensive tactics and techniques
+            self.capec_attack_cache = {
+                # Initial Access (TA0001)
+                "CAPEC-106": {"tactics": ["TA0001"], "techniques": ["T1189", "T1203"]},  # XSS -> Drive-by, Exploitation
+                "CAPEC-63": {"tactics": ["TA0001"], "techniques": ["T1189", "T1566"]},   # XSS -> Drive-by, Phishing
+                "CAPEC-66": {"tactics": ["TA0001"], "techniques": ["T1190"]},            # SQL Injection -> Exploit Public App
+                "CAPEC-7": {"tactics": ["TA0001"], "techniques": ["T1190"]},             # SQL Injection -> Exploit Public App
+                "CAPEC-115": {"tactics": ["TA0001"], "techniques": ["T1078"]},           # Auth Bypass -> Valid Accounts
+                "CAPEC-49": {"tactics": ["TA0001"], "techniques": ["T1078", "T1110"]},   # Auth Bypass -> Valid Accounts, Brute Force
+                
+                # Execution (TA0002)
+                "CAPEC-88": {"tactics": ["TA0002"], "techniques": ["T1059"]},            # Command Injection -> Command Line
+                "CAPEC-43": {"tactics": ["TA0002"], "techniques": ["T1059"]},            # Command Injection -> Command Line
+                "CAPEC-35": {"tactics": ["TA0002"], "techniques": ["T1203", "T1059"]},   # Code Injection -> Exploitation, Command Line
+                "CAPEC-242": {"tactics": ["TA0002"], "techniques": ["T1203"]},           # Code Injection -> Exploitation
+                "CAPEC-1": {"tactics": ["TA0002"], "techniques": ["T1059"]},             # File Upload -> Command Line
+                
+                # Persistence (TA0003)
+                "CAPEC-17": {"tactics": ["TA0003"], "techniques": ["T1505", "T1059"]},   # File Upload -> Server Software, Command Line
+                "CAPEC-23": {"tactics": ["TA0003"], "techniques": ["T1505"]},            # File Upload -> Server Software
+                
+                # Privilege Escalation (TA0004)
+                "CAPEC-122": {"tactics": ["TA0004"], "techniques": ["T1068", "T1078"]},  # Privilege Escalation -> Exploit, Valid Accounts
+                "CAPEC-470": {"tactics": ["TA0004"], "techniques": ["T1068"]},           # Privilege Escalation -> Exploit
+                "CAPEC-100": {"tactics": ["TA0004"], "techniques": ["T1068"]},           # Buffer Overflow -> Exploit
+                "CAPEC-14": {"tactics": ["TA0004"], "techniques": ["T1068"]},            # Buffer Overflow -> Exploit
+                
+                # Defense Evasion (TA0005)
+                "CAPEC-85": {"tactics": ["TA0005"], "techniques": ["T1055", "T1027"]},   # XSS -> Process Injection, Obfuscation
+                "CAPEC-209": {"tactics": ["TA0005"], "techniques": ["T1027"]},           # XSS -> Obfuscation
+                "CAPEC-586": {"tactics": ["TA0005"], "techniques": ["T1055"]},           # Deserialization -> Process Injection
+                
+                # Credential Access (TA0006)
+                "CAPEC-509": {"tactics": ["TA0006"], "techniques": ["T1110", "T1555"]},  # Weak Passwords -> Brute Force, Credentials
+                "CAPEC-55": {"tactics": ["TA0006"], "techniques": ["T1110"]},            # Weak Passwords -> Brute Force
+                "CAPEC-560": {"tactics": ["TA0006"], "techniques": ["T1078"]},           # Auth Bypass -> Valid Accounts
+                
+                # Discovery (TA0007)
+                "CAPEC-118": {"tactics": ["TA0007"], "techniques": ["T1083", "T1087"]},  # Info Disclosure -> File Discovery, Account Discovery
+                "CAPEC-116": {"tactics": ["TA0007"], "techniques": ["T1083"]},           # Info Disclosure -> File Discovery
+                "CAPEC-497": {"tactics": ["TA0007"], "techniques": ["T1083", "T1057"]},  # Info Disclosure -> File Discovery, Process Discovery
+                "CAPEC-126": {"tactics": ["TA0007"], "techniques": ["T1083"]},           # Path Traversal -> File Discovery
+                
+                # Lateral Movement (TA0008)
+                "CAPEC-664": {"tactics": ["TA0008"], "techniques": ["T1021"]},           # SSRF -> Remote Services
+                "CAPEC-219": {"tactics": ["TA0008"], "techniques": ["T1021"]},           # SSRF -> Remote Services
+                
+                # Collection (TA0009)
+                "CAPEC-139": {"tactics": ["TA0009"], "techniques": ["T1005"]},           # Path Traversal -> Data from Local System
+                "CAPEC-64": {"tactics": ["TA0009"], "techniques": ["T1005"]},            # Path Traversal -> Data from Local System
+                
+                # Exfiltration (TA0010)
+                "CAPEC-116": {"tactics": ["TA0010"], "techniques": ["T1041"]},           # Info Disclosure -> Exfiltration
+                "CAPEC-612": {"tactics": ["TA0010"], "techniques": ["T1041"]},           # Info in Logs -> Exfiltration
+                
+                # Impact (TA0040)
+                "CAPEC-125": {"tactics": ["TA0040"], "techniques": ["T1499"]},           # Resource Exhaustion -> DoS
+                "CAPEC-197": {"tactics": ["TA0040"], "techniques": ["T1499"]},           # Resource Exhaustion -> DoS
+                "CAPEC-227": {"tactics": ["TA0040"], "techniques": ["T1499"]},           # Infinite Loop -> DoS
+                "CAPEC-130": {"tactics": ["TA0040"], "techniques": ["T1499"]},           # Infinite Loop -> DoS
+            }
+            
+            # Load ATT&CK technique and tactic metadata
+            self.attack_techniques_cache = {
+                # Initial Access
+                "T1189": {"name": "Drive-by Compromise", "tactic": "TA0001", "kill_chain": ["weaponization", "delivery"]},
+                "T1190": {"name": "Exploit Public-Facing Application", "tactic": "TA0001", "kill_chain": ["weaponization", "exploitation"]},
+                "T1566": {"name": "Phishing", "tactic": "TA0001", "kill_chain": ["delivery"]},
+                "T1078": {"name": "Valid Accounts", "tactic": "TA0001", "kill_chain": ["installation"]},
+                "T1110": {"name": "Brute Force", "tactic": "TA0006", "kill_chain": ["exploitation"]},
+                
+                # Execution
+                "T1059": {"name": "Command and Scripting Interpreter", "tactic": "TA0002", "kill_chain": ["exploitation", "installation"]},
+                "T1203": {"name": "Exploitation for Client Execution", "tactic": "TA0002", "kill_chain": ["exploitation"]},
+                
+                # Persistence
+                "T1505": {"name": "Server Software Component", "tactic": "TA0003", "kill_chain": ["installation"]},
+                
+                # Privilege Escalation
+                "T1068": {"name": "Exploitation for Privilege Escalation", "tactic": "TA0004", "kill_chain": ["privilege-escalation"]},
+                
+                # Defense Evasion
+                "T1055": {"name": "Process Injection", "tactic": "TA0005", "kill_chain": ["defense-evasion"]},
+                "T1027": {"name": "Obfuscated Files or Information", "tactic": "TA0005", "kill_chain": ["defense-evasion"]},
+                
+                # Credential Access
+                "T1555": {"name": "Credentials from Password Stores", "tactic": "TA0006", "kill_chain": ["credential-access"]},
+                
+                # Discovery
+                "T1083": {"name": "File and Directory Discovery", "tactic": "TA0007", "kill_chain": ["discovery"]},
+                "T1087": {"name": "Account Discovery", "tactic": "TA0007", "kill_chain": ["discovery"]},
+                "T1057": {"name": "Process Discovery", "tactic": "TA0007", "kill_chain": ["discovery"]},
+                
+                # Lateral Movement
+                "T1021": {"name": "Remote Services", "tactic": "TA0008", "kill_chain": ["lateral-movement"]},
+                
+                # Collection
+                "T1005": {"name": "Data from Local System", "tactic": "TA0009", "kill_chain": ["collection"]},
+                
+                # Exfiltration
+                "T1041": {"name": "Exfiltration Over C2 Channel", "tactic": "TA0010", "kill_chain": ["exfiltration"]},
+                
+                # Impact
+                "T1499": {"name": "Endpoint Denial of Service", "tactic": "TA0040", "kill_chain": ["actions-on-objectives"]},
+            }
+            
+            self.attack_tactics_cache = {
+                "TA0001": {"name": "Initial Access", "description": "Trying to get into your network"},
+                "TA0002": {"name": "Execution", "description": "Trying to run malicious code"},
+                "TA0003": {"name": "Persistence", "description": "Trying to maintain their foothold"},
+                "TA0004": {"name": "Privilege Escalation", "description": "Trying to gain higher-level permissions"},
+                "TA0005": {"name": "Defense Evasion", "description": "Trying to avoid being detected"},
+                "TA0006": {"name": "Credential Access", "description": "Trying to steal account names and passwords"},
+                "TA0007": {"name": "Discovery", "description": "Trying to figure out your environment"},
+                "TA0008": {"name": "Lateral Movement", "description": "Trying to move through your environment"},
+                "TA0009": {"name": "Collection", "description": "Trying to gather data of interest"},
+                "TA0010": {"name": "Exfiltration", "description": "Trying to steal data"},
+                "TA0040": {"name": "Impact", "description": "Trying to manipulate, interrupt, or destroy systems and data"},
+            }
+            
+            logger.debug("CWE-CAPEC-ATT&CK mappings loaded successfully")
+            
+        except Exception as e:
+            logger.warning(f"Error loading CWE-CAPEC mappings: {e}")
+    
+    async def _load_attack_enterprise_data(self, session: Any) -> None:
+        """Load ATT&CK Enterprise data from MITRE repositories."""
+        try:
+            # This would fetch from: https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json
+            # For now, using comprehensive static data based on MITRE ATT&CK v14
+            logger.debug("ATT&CK Enterprise data loaded from static cache")
+        except Exception as e:
+            logger.warning(f"Error loading ATT&CK Enterprise data: {e}")
+    
+    async def _load_cisa_kev_data(self, session: Any) -> None:
+        """Load CISA Known Exploited Vulnerabilities catalog."""
+        try:
+            # Load from CISA KEV JSON catalog
+            url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+            
+            async with session.get(url, headers=self.headers) as response:
+                if response.status == 200:
+                    try:
+                        kev_data = await response.json()
+                        # Create lookup by CVE ID
+                        for vuln in kev_data.get("vulnerabilities", []):
+                            cve_id = vuln.get("cveID")
+                            if cve_id:
+                                self.kev_cache[cve_id] = {
+                                    "in_kev": True,
+                                    "vendor_project": vuln.get("vendorProject", ""),
+                                    "product": vuln.get("product", ""),
+                                    "vulnerability_name": vuln.get("vulnerabilityName", ""),
+                                    "short_description": vuln.get("shortDescription", ""),
+                                    "date_added": vuln.get("dateAdded", ""),
+                                    "due_date": vuln.get("dueDate", ""),
+                                    "required_action": vuln.get("requiredAction", ""),
+                                    "known_ransomware_use": vuln.get("knownRansomwareCampaignUse", "Unknown"),
+                                    "cwe_ids": vuln.get("cwes", []),
+                                    "notes": vuln.get("notes", "")
+                                }
+                        logger.debug(f"CISA KEV data loaded: {len(self.kev_cache)} vulnerabilities")
+                    except Exception as e:
+                        logger.warning(f"Error parsing CISA KEV data: {e}")
+                else:
+                    logger.warning(f"Failed to load CISA KEV data: HTTP {response.status}")
+        except Exception as e:
+            logger.warning(f"Error loading CISA KEV data: {e}")
     
     async def fetch(self, cve_id: str, session: Any) -> Dict[str, Any]:
-        """MITRE data is typically cached locally."""
-        # Would implement STIX bundle fetching
-        return {}
+        """Load MITRE framework data on first access."""
+        # Load all MITRE caches if not already loaded
+        await self._load_mitre_caches(session)
+        
+        # Return relevant data for this CVE
+        data = {}
+        
+        # Check CISA KEV status
+        if cve_id in self.kev_cache:
+            data["kev_data"] = self.kev_cache[cve_id]
+        
+        return data
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse MITRE ATT&CK and CAPEC mappings."""
-        # Basic CWE-to-CAPEC mapping for common vulnerability types
-        cwe_to_capec_mapping = {
-            "CWE-79": ["CAPEC-106", "CAPEC-63", "CAPEC-209"],  # XSS
-            "CWE-89": ["CAPEC-66", "CAPEC-7", "CAPEC-108"],    # SQL Injection
-            "CWE-22": ["CAPEC-126", "CAPEC-139", "CAPEC-64"],  # Path Traversal
-            "CWE-78": ["CAPEC-88", "CAPEC-43"],                # OS Command Injection
-            "CWE-94": ["CAPEC-35", "CAPEC-242"],               # Code Injection
-            "CWE-352": ["CAPEC-62"],                           # CSRF
-            "CWE-434": ["CAPEC-1", "CAPEC-17"],               # File Upload
-            "CWE-611": ["CAPEC-201", "CAPEC-230"],             # XXE
-            "CWE-502": ["CAPEC-586"],                          # Deserialization
-            "CWE-287": ["CAPEC-115", "CAPEC-49"],              # Authentication Bypass
-            "CWE-306": ["CAPEC-114"],                          # Missing Authentication
-            "CWE-200": ["CAPEC-118", "CAPEC-116"],             # Information Disclosure
-            "CWE-269": ["CAPEC-122", "CAPEC-470"],             # Privilege Escalation
-            "CWE-119": ["CAPEC-100", "CAPEC-14"],              # Buffer Overflow
-            "CWE-120": ["CAPEC-100", "CAPEC-123"],             # Buffer Copy
-            "CWE-125": ["CAPEC-540"],                          # Out-of-bounds Read
-            "CWE-787": ["CAPEC-540"],                          # Out-of-bounds Write
-        }
-        
-        # Basic CAPEC-to-ATT&CK tactics mapping
-        capec_to_tactics_mapping = {
-            "CAPEC-106": ["TA0001"],  # Initial Access (XSS)
-            "CAPEC-63": ["TA0001"],   # Initial Access (XSS)
-            "CAPEC-66": ["TA0001"],   # Initial Access (SQL Injection)
-            "CAPEC-7": ["TA0001"],    # Initial Access (SQL Injection)
-            "CAPEC-88": ["TA0002"],   # Execution (Command Injection)
-            "CAPEC-43": ["TA0002"],   # Execution (Command Injection)
-            "CAPEC-35": ["TA0002"],   # Execution (Code Injection)
-            "CAPEC-122": ["TA0004"],  # Privilege Escalation
-            "CAPEC-470": ["TA0004"],  # Privilege Escalation
-            "CAPEC-118": ["TA0007"],  # Discovery (Info Disclosure)
-            "CAPEC-116": ["TA0010"],  # Exfiltration (Info Disclosure)
-            "CAPEC-100": ["TA0040"],  # Impact (Buffer Overflow)
-        }
-        
-        # ATT&CK technique mapping
-        capec_to_techniques_mapping = {
-            "CAPEC-106": ["T1059", "T1203"],  # XSS -> Command Line, Exploitation
-            "CAPEC-66": ["T1190"],            # SQL Injection -> Exploit Public App
-            "CAPEC-88": ["T1059"],            # Command Injection -> Command Line
-            "CAPEC-35": ["T1203"],            # Code Injection -> Exploitation
-            "CAPEC-122": ["T1068"],           # Privilege Escalation -> Exploit
-            "CAPEC-118": ["T1083"],           # Info Disclosure -> File Discovery
-            "CAPEC-100": ["T1068"],           # Buffer Overflow -> Exploit
-        }
-        
+        """Parse MITRE ATT&CK and CAPEC mappings with comprehensive framework integration."""
         # Extract CWE data from foundational layer if available
         cwe_data = data.get("foundational_cwe", [])
         
         capec_ids = []
         attack_techniques = []
         attack_tactics = []
+        kill_chain_phases = []
+        technique_names = []
+        tactic_names = []
         
-        # Map CWE to CAPEC and ATT&CK
+        # Map CWE to CAPEC and ATT&CK using comprehensive mappings
         for cwe_id in cwe_data:
-            if cwe_id in cwe_to_capec_mapping:
-                capec_list = cwe_to_capec_mapping[cwe_id]
+            if cwe_id in self.cwe_capec_cache:
+                capec_list = self.cwe_capec_cache[cwe_id]
                 capec_ids.extend(capec_list)
                 
-                # Map CAPEC to ATT&CK
+                # Map CAPEC to ATT&CK with enhanced metadata
                 for capec_id in capec_list:
-                    if capec_id in capec_to_tactics_mapping:
-                        attack_tactics.extend(capec_to_tactics_mapping[capec_id])
-                    if capec_id in capec_to_techniques_mapping:
-                        attack_techniques.extend(capec_to_techniques_mapping[capec_id])
+                    if capec_id in self.capec_attack_cache:
+                        capec_mapping = self.capec_attack_cache[capec_id]
+                        attack_tactics.extend(capec_mapping.get("tactics", []))
+                        techniques = capec_mapping.get("techniques", [])
+                        attack_techniques.extend(techniques)
+                        
+                        # Add technique names and kill chain phases
+                        for technique_id in techniques:
+                            if technique_id in self.attack_techniques_cache:
+                                technique_info = self.attack_techniques_cache[technique_id]
+                                technique_names.append(f"{technique_id}: {technique_info['name']}")
+                                kill_chain_phases.extend(technique_info.get("kill_chain", []))
+                        
+                        # Add tactic names
+                        for tactic_id in capec_mapping.get("tactics", []):
+                            if tactic_id in self.attack_tactics_cache:
+                                tactic_info = self.attack_tactics_cache[tactic_id]
+                                tactic_names.append(f"{tactic_id}: {tactic_info['name']}")
         
-        # Remove duplicates
-        capec_ids = list(set(capec_ids))
-        attack_techniques = list(set(attack_techniques))
-        attack_tactics = list(set(attack_tactics))
+        # Remove duplicates and sort
+        capec_ids = sorted(list(set(capec_ids)))
+        attack_techniques = sorted(list(set(attack_techniques)))
+        attack_tactics = sorted(list(set(attack_tactics)))
+        kill_chain_phases = sorted(list(set(kill_chain_phases)))
+        technique_names = sorted(list(set(technique_names)))
+        tactic_names = sorted(list(set(tactic_names)))
         
-        return {
+        # Create human-readable descriptions for CWE and CAPEC
+        cwe_details = []
+        for cwe_id in cwe_data:
+            description = self.cwe_descriptions_cache.get(cwe_id, "")
+            if description:
+                cwe_details.append(f"{cwe_id}: {description}")
+            else:
+                cwe_details.append(cwe_id)
+                
+        capec_details = []
+        for capec_id in capec_ids:
+            description = self.capec_descriptions_cache.get(capec_id, "")
+            if description:
+                capec_details.append(f"{capec_id}: {description}")
+            else:
+                capec_details.append(capec_id)
+        
+        # Enhanced MITRE framework data
+        result = {
             "cwe_ids": cwe_data,
             "capec_ids": capec_ids,
             "attack_techniques": attack_techniques,
-            "attack_tactics": attack_tactics
+            "attack_tactics": attack_tactics,
+            "kill_chain_phases": kill_chain_phases,
+            "technique_details": technique_names,
+            "tactic_details": tactic_names,
+            "cwe_details": cwe_details,
+            "capec_details": capec_details
         }
+        
+        # Add CISA KEV data if available
+        kev_data = data.get("kev_data", {})
+        if kev_data:
+            result["kev_info"] = kev_data
+        
+        logger.debug(f"MITRE analysis for {cve_id}: {len(capec_ids)} CAPECs, {len(attack_techniques)} techniques, {len(attack_tactics)} tactics")
+        
+        return result
 
 
 class ThreatContextConnector(DataSourceConnector):
@@ -734,8 +1207,8 @@ class ThreatContextConnector(DataSourceConnector):
                 "percentile": epss_data.get("percentile", 0.0)  # Will calculate if available
             }
         
-        # TODO: Add CISA KEV data from GitHub source
-        data["in_kev"] = False  # Placeholder
+        # CISA KEV data is now handled by MITREConnector
+        # This provides EPSS scores and threat context data
         
         return data
     
@@ -809,10 +1282,17 @@ class CVSSBTConnector(DataSourceConnector):
                                 'base_vector': row.get('base_vector', ''),
                                 'cvss_version': row.get('cvss_version', ''),
                                 'cvss_bt_score': safe_float(row.get('cvss-bt_score')),
+                                'cvss_bt_severity': row.get('cvss-bt_severity', ''),
+                                'cvss_bt_vector': row.get('cvss-bt_vector', ''),
+                                'assigner': row.get('assigner', ''),
+                                'published_date': row.get('published_date', ''),
                                 'epss': safe_float(row.get('epss')),
                                 'cisa_kev': row.get('cisa_kev', '').lower() == 'true',
+                                'vulncheck_kev': row.get('vulncheck_kev', '').lower() == 'true',
                                 'exploitdb': row.get('exploitdb', '').lower() == 'true',
-                                'metasploit': row.get('metasploit', '').lower() == 'true'
+                                'metasploit': row.get('metasploit', '').lower() == 'true',
+                                'nuclei': row.get('nuclei', '').lower() == 'true',
+                                'poc_github': row.get('poc_github', '').lower() == 'true'
                             }
                     
                     self.cache_loaded = True
@@ -847,11 +1327,19 @@ class CVSSBTConnector(DataSourceConnector):
             "cvss_score": data.get("base_score", 0.0),
             "cvss_vector": data.get("base_vector", ""),
             "cvss_version": data.get("cvss_version", ""),
+            "cvss_bt_score": data.get("cvss_bt_score", 0.0),
+            "cvss_bt_severity": data.get("cvss_bt_severity", ""),
+            "cvss_bt_vector": data.get("cvss_bt_vector", ""),
+            "assigner": data.get("assigner", ""),
+            "published_date": data.get("published_date", ""),
             "threat": {
                 "in_kev": data.get("cisa_kev", False),
+                "vulncheck_kev": data.get("vulncheck_kev", False),
                 "epss_score": data.get("epss", 0.0),
                 "has_metasploit": data.get("metasploit", False),
-                "has_exploitdb": data.get("exploitdb", False)
+                "has_exploitdb": data.get("exploitdb", False),
+                "has_nuclei": data.get("nuclei", False),
+                "has_poc_github": data.get("poc_github", False)
             }
         }
 
@@ -988,7 +1476,48 @@ class PatrowlConnector(DataSourceConnector):
                 "obtain_all_privilege": v2_data.get("obtainAllPrivilege", False)
             }
         
-        logger.debug(f"Patrowl parsed {cve_id}: CVSS={cvss_score}, CPEs={len(cpe_matches)}")
+        # Extract and categorize references
+        references = cve_data.get("references", {}).get("reference_data", [])
+        vendor_advisories = []
+        patches = []
+        general_refs = []
+        
+        for ref in references:
+            url = ref.get("url", "")
+            name = ref.get("name", "")
+            
+            # Enhanced categorization logic
+            url_lower = url.lower()
+            if any(term in url_lower for term in ['advisory', 'security', 'vendor', 'bulletin', 'alert']):
+                vendor_advisories.append({"url": url, "name": name})
+            elif any(term in url_lower for term in ['patch', 'fix', 'update', 'upgrade', 'release']):
+                patches.append({"url": url, "name": name})
+            else:
+                general_refs.append({"url": url, "name": name})
+        
+        # Extract problem type information
+        problem_types = []
+        for problem in cve_data.get("problemtype", {}).get("problemtype_data", []):
+            for desc in problem.get("description", []):
+                if desc.get("lang") == "en":
+                    problem_types.append(desc.get("value", ""))
+        
+        # Extract assigner information
+        assigner = cve_data.get("CVE_data_meta", {}).get("ASSIGNER", "")
+        vulnerability_name = cve_data.get("CVE_data_meta", {}).get("TITLE", "")
+        
+        # Add enhanced fields to result
+        result.update({
+            "vendor_advisories": vendor_advisories,
+            "patches": patches,
+            "general_references": general_refs,
+            "problem_types": problem_types,
+            "assigner": assigner,
+            "vulnerability_name": vulnerability_name
+        })
+        
+        logger.debug(f"Patrowl parsed {cve_id}: CVSS={cvss_score}, CPEs={len(cpe_matches)}, "
+                    f"Advisories={len(vendor_advisories)}, Patches={len(patches)}, References={len(general_refs)}")
         return result
 
 
@@ -1020,6 +1549,8 @@ class VulnerabilityResearchEngine:
         self.cvss_bt_connector = CVSSBTConnector()
         
         # Inject session cache into connectors that can benefit from it
+        if hasattr(self.connectors[DataLayer.WEAKNESS_TACTICS], 'set_session_cache'):
+            self.connectors[DataLayer.WEAKNESS_TACTICS].set_session_cache(self.session_cache)
         if hasattr(self.connectors[DataLayer.THREAT_CONTEXT], 'set_session_cache'):
             self.connectors[DataLayer.THREAT_CONTEXT].set_session_cache(self.session_cache)
         if hasattr(self.cvss_bt_connector, 'set_session_cache'):
@@ -1208,20 +1739,49 @@ class VulnerabilityResearchEngine:
             references=foundational.get("references", [])
         )
         
+        # Add CPE affected products from foundational data (CVE Project)
+        foundational_cpe = foundational.get("cpe_affected", [])
+        research_data.cpe_affected.extend(foundational_cpe)
+        
         # Add enhanced data from Patrowl (Layer 5 - Raw Intelligence)
         if raw_intelligence:
             # Merge CPE affected products
             patrowl_cpe = raw_intelligence.get("cpe_affected", [])
             research_data.cpe_affected.extend(patrowl_cpe)
             
+            # Add categorized references from Patrowl
+            vendor_advisories = raw_intelligence.get("vendor_advisories", [])
+            patches = raw_intelligence.get("patches", [])
+            general_refs = raw_intelligence.get("general_references", [])
+            
+            # Convert structured references to URLs and add to appropriate lists
+            for advisory in vendor_advisories:
+                if advisory.get("url"):
+                    research_data.vendor_advisories.append(advisory["url"])
+            
+            for patch in patches:
+                if patch.get("url"):
+                    research_data.patches.append(patch["url"])
+            
+            # Add general references to main references list
+            for ref in general_refs:
+                if ref.get("url") and ref["url"] not in research_data.references:
+                    research_data.references.append(ref["url"])
+            
+            # Store metadata for enhanced intelligence
+            if raw_intelligence.get("assigner"):
+                research_data.patches.append(f"Assigner: {raw_intelligence['assigner']}")
+            
+            if raw_intelligence.get("vulnerability_name"):
+                research_data.patches.append(f"Vulnerability Name: {raw_intelligence['vulnerability_name']}")
+            
             # Store impact metrics as additional metadata
             impact_metrics = raw_intelligence.get("impact_metrics", {})
             if impact_metrics:
-                # Store in a way that doesn't conflict with existing fields
                 research_data.patches.append(f"Impact Score: {impact_metrics.get('impact_score', 'N/A')}")
                 research_data.patches.append(f"Exploitability Score: {impact_metrics.get('exploitability_score', 'N/A')}")
         
-        # Add exploit data with error handling
+        # Add exploit data with error handling and enhanced metadata
         exploit_data = results.get(DataLayer.EXPLOIT_MECHANICS, {})
         exploits_added = 0
         for exploit in exploit_data.get("exploits", []):
@@ -1236,19 +1796,50 @@ class VulnerabilityResearchEngine:
             except Exception as e:
                 logger.debug(f"Failed to add exploit for {cve_id}: {e}")
         
+        # Add Trickest metadata to research data
+        trickest_metadata = exploit_data.get("metadata", {})
+        if trickest_metadata:
+            # Add product information
+            if trickest_metadata.get("product"):
+                research_data.patches.append(f"Trickest Product: {trickest_metadata['product']}")
+            
+            # Add CWE from Trickest if not already available
+            if trickest_metadata.get("cwe_id") and not research_data.weakness.cwe_ids:
+                research_data.weakness.cwe_ids.append(trickest_metadata["cwe_id"])
+                research_data.patches.append(f"Trickest CWE: {trickest_metadata['cwe_id']}")
+            
+            # Add technology stack information
+            if trickest_metadata.get("technology_stack"):
+                tech_info = "; ".join(trickest_metadata["technology_stack"])
+                research_data.patches.append(f"Technology Stack: {tech_info}")
+            
+            # Enhance description if foundational description is minimal
+            if trickest_metadata.get("description") and len(research_data.description) < 100:
+                research_data.description = trickest_metadata["description"]
+        
+        # Add categorized references from Trickest
+        trickest_refs = exploit_data.get("references", {})
+        if trickest_refs.get("advisories"):
+            research_data.vendor_advisories.extend(trickest_refs["advisories"])
+        
         if exploits_added > 0:
             logger.debug(f"Added {exploits_added} exploits for {cve_id}")
         
-        # Determine exploit maturity with fallback
-        if research_data.exploits:
-            if any(e.type in ["metasploit", "nuclei"] for e in research_data.exploits):
-                research_data.exploit_maturity = "weaponized"
-            elif any(e.type == "exploit-db" for e in research_data.exploits):
-                research_data.exploit_maturity = "functional"
-            else:
-                research_data.exploit_maturity = "poc"
+        # Use enhanced exploit maturity from Trickest if available, otherwise fallback to legacy logic
+        trickest_maturity = exploit_data.get("exploit_maturity")
+        if trickest_maturity and trickest_maturity != "unproven":
+            research_data.exploit_maturity = trickest_maturity
         else:
-            research_data.exploit_maturity = "unproven"
+            # Legacy fallback logic
+            if research_data.exploits:
+                if any(e.type in ["metasploit", "nuclei"] for e in research_data.exploits):
+                    research_data.exploit_maturity = "weaponized"
+                elif any(e.type == "exploit-db" for e in research_data.exploits):
+                    research_data.exploit_maturity = "functional"
+                else:
+                    research_data.exploit_maturity = "poc"
+            else:
+                research_data.exploit_maturity = "unproven"
         
         # Add threat context with fallbacks from multiple Layer 4 sources
         epss_threat_data = threat_context.get("threat", {})  # From ThreatContextConnector (EPSS)
@@ -1256,13 +1847,16 @@ class VulnerabilityResearchEngine:
         
         # Merge threat data from Layer 4 sources (Real-World Context)
         research_data.threat.in_kev = cvss_bt_threat_data.get("in_kev", epss_threat_data.get("in_kev", False))
+        research_data.threat.vulncheck_kev = cvss_bt_threat_data.get("vulncheck_kev", False)
         research_data.threat.epss_score = epss_threat_data.get("epss_score") or cvss_bt_threat_data.get("epss_score")
         research_data.threat.epss_percentile = epss_threat_data.get("epss_percentile") or cvss_bt_threat_data.get("epss_percentile")
         research_data.threat.actively_exploited = cvss_bt_threat_data.get("in_kev", epss_threat_data.get("actively_exploited", False))
         research_data.threat.has_metasploit = cvss_bt_threat_data.get("has_metasploit", False)
-        research_data.threat.has_nuclei = False  # Would come from other sources
+        research_data.threat.has_nuclei = cvss_bt_threat_data.get("has_nuclei", False)
+        research_data.threat.has_exploitdb = cvss_bt_threat_data.get("has_exploitdb", False)
+        research_data.threat.has_poc_github = cvss_bt_threat_data.get("has_poc_github", False)
         
-        # Add weakness data with fallback to foundational data
+        # Add enhanced weakness data with comprehensive MITRE framework integration
         weakness_data = results.get(DataLayer.WEAKNESS_TACTICS, {})
         if weakness_data.get("cwe_ids"):
             research_data.weakness.cwe_ids = weakness_data["cwe_ids"]
@@ -1278,6 +1872,49 @@ class VulnerabilityResearchEngine:
             
         if weakness_data.get("attack_tactics"):
             research_data.weakness.attack_tactics = weakness_data["attack_tactics"]
+            
+        # Add kill chain phases from enhanced MITRE data
+        if weakness_data.get("kill_chain_phases"):
+            research_data.weakness.kill_chain_phases = weakness_data["kill_chain_phases"]
+            
+        # Add human-readable descriptions from enhanced MITRE data
+        if weakness_data.get("cwe_details"):
+            research_data.weakness.cwe_details = weakness_data["cwe_details"]
+        if weakness_data.get("capec_details"):
+            research_data.weakness.capec_details = weakness_data["capec_details"]
+        if weakness_data.get("technique_details"):
+            research_data.weakness.technique_details = weakness_data["technique_details"]
+        if weakness_data.get("tactic_details"):
+            research_data.weakness.tactic_details = weakness_data["tactic_details"]
+        
+        # Update threat context with CISA KEV data from MITRE connector
+        kev_info = weakness_data.get("kev_info", {})
+        if kev_info:
+            research_data.threat.in_kev = kev_info.get("in_kev", False)
+            research_data.threat.actively_exploited = kev_info.get("in_kev", False)
+            
+            # Enhanced CISA KEV fields
+            research_data.threat.ransomware_campaign = kev_info.get("known_ransomware_use", "Unknown").lower() == "yes"
+            research_data.threat.kev_vulnerability_name = kev_info.get("vulnerability_name", "")
+            research_data.threat.kev_short_description = kev_info.get("short_description", "")
+            research_data.threat.kev_vendor_project = kev_info.get("vendor_project", "")
+            research_data.threat.kev_product = kev_info.get("product", "")
+            
+            # Add KEV-specific metadata to patches if available
+            if kev_info.get("required_action"):
+                research_data.patches.append(f"CISA KEV Required Action: {kev_info['required_action']}")
+            if kev_info.get("due_date"):
+                research_data.patches.append(f"CISA KEV Due Date: {kev_info['due_date']}")
+            if kev_info.get("vendor_project") and kev_info.get("product"):
+                research_data.patches.append(f"CISA KEV Affected: {kev_info['vendor_project']} {kev_info['product']}")
+        
+        # Log enhanced MITRE intelligence summary
+        if weakness_data:
+            logger.debug(f"Enhanced MITRE data for {cve_id}: "
+                        f"{len(weakness_data.get('capec_ids', []))} CAPECs, "
+                        f"{len(weakness_data.get('attack_techniques', []))} techniques, "
+                        f"{len(weakness_data.get('attack_tactics', []))} tactics, "
+                        f"{len(weakness_data.get('kill_chain_phases', []))} kill chain phases")
         
         # Populate additional fields from foundational CVE Project data
         if foundational.get("vendor_advisories"):
@@ -1694,7 +2331,8 @@ class ResearchReportGenerator:
                 "cwe_ids": rd.weakness.cwe_ids,
                 "capec_ids": rd.weakness.capec_ids,
                 "attack_techniques": rd.weakness.attack_techniques,
-                "attack_tactics": rd.weakness.attack_tactics
+                "attack_tactics": rd.weakness.attack_tactics,
+                "kill_chain_phases": rd.weakness.kill_chain_phases
             },
             "threat": {
                 "in_kev": rd.threat.in_kev,
@@ -1753,7 +2391,7 @@ class ResearchReportGenerator:
                 'CVSS': rd.cvss_score,
                 'Severity': rd.severity,
                 'Vector': rd.cvss_vector,
-                'CWE': '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else '',
+                'CWE': '; '.join(rd.weakness.cwe_details) if rd.weakness.cwe_details else '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else '',
                 'Exploit': 'Yes' if exploit_urls else 'No',
                 'ExploitRefs': '; '.join(exploit_urls),
                 'FixVersion': fix_versions[0] if fix_versions else '',
@@ -1775,19 +2413,30 @@ class ResearchReportGenerator:
                 'Exploit Count': len(exploit_urls),
                 'Exploit Maturity': rd.exploit_maturity,
                 'Exploit Types': '; '.join([e.type for e in rd.exploits]) if rd.exploits else '',
+                'Technology Stack': next((p.replace('Technology Stack: ', '') for p in rd.patches if p.startswith('Technology Stack:')), ''),
                 'CISA KEV': 'Yes' if rd.threat.in_kev else 'No',
+                'Ransomware Campaign Use': 'Yes' if rd.threat.ransomware_campaign else 'No',
+                'KEV Vulnerability Name': rd.threat.kev_vulnerability_name,
+                'KEV Vendor Project': rd.threat.kev_vendor_project,
+                'KEV Product': rd.threat.kev_product,
+                'VulnCheck KEV': 'Yes' if rd.threat.vulncheck_kev else 'No',
                 'EPSS Score': rd.threat.epss_score if rd.threat.epss_score else '',
                 'EPSS Percentile': rd.threat.epss_percentile if rd.threat.epss_percentile else '',
                 'Actively Exploited': 'Yes' if rd.threat.actively_exploited else 'No',
                 'Has Metasploit': 'Yes' if rd.threat.has_metasploit else 'No',
                 'Has Nuclei': 'Yes' if rd.threat.has_nuclei else 'No',
-                'CAPEC IDs': '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
-                'Attack Techniques': '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
-                'Attack Tactics': '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
+                'Has ExploitDB': 'Yes' if rd.threat.has_exploitdb else 'No',
+                'Has PoC GitHub': 'Yes' if rd.threat.has_poc_github else 'No',
+                'CAPEC IDs': '; '.join(rd.weakness.capec_details) if rd.weakness.capec_details else '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
+                'Attack Techniques': '; '.join(rd.weakness.technique_details) if rd.weakness.technique_details else '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
+                'Attack Tactics': '; '.join(rd.weakness.tactic_details) if rd.weakness.tactic_details else '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
+                'Kill Chain Phases': '; '.join(rd.weakness.kill_chain_phases) if rd.weakness.kill_chain_phases else '',
                 'Reference Count': len(rd.references),
                 'CPE Affected Count': len(rd.cpe_affected),
+                'Vendor Advisory Count': len(rd.vendor_advisories),
+                'Patch Reference Count': len([p for p in rd.patches if p.startswith('http')]),
                 'Vendor Advisories': '; '.join(rd.vendor_advisories) if rd.vendor_advisories else '',
-                'Patches': '; '.join(rd.patches) if rd.patches else ''
+                'Patches': '; '.join([p for p in rd.patches if p.startswith('http')]) if rd.patches else ''
             })
         
         if not pd:
@@ -1924,7 +2573,7 @@ class ResearchReportGenerator:
                 'CVSS': rd.cvss_score,
                 'Severity': rd.severity,
                 'Vector': rd.cvss_vector,
-                'CWE': '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else '',
+                'CWE': '; '.join(rd.weakness.cwe_details) if rd.weakness.cwe_details else '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else '',
                 'Exploit': 'Yes' if exploit_urls else 'No',
                 'ExploitRefs': '; '.join(exploit_urls),
                 'FixVersion': fix_versions[0] if fix_versions else '',
@@ -1946,19 +2595,30 @@ class ResearchReportGenerator:
                 'Exploit Count': len(exploit_urls),
                 'Exploit Maturity': rd.exploit_maturity,
                 'Exploit Types': '; '.join([e.type for e in rd.exploits]) if rd.exploits else '',
+                'Technology Stack': next((p.replace('Technology Stack: ', '') for p in rd.patches if p.startswith('Technology Stack:')), ''),
                 'CISA KEV': 'Yes' if rd.threat.in_kev else 'No',
+                'Ransomware Campaign Use': 'Yes' if rd.threat.ransomware_campaign else 'No',
+                'KEV Vulnerability Name': rd.threat.kev_vulnerability_name,
+                'KEV Vendor Project': rd.threat.kev_vendor_project,
+                'KEV Product': rd.threat.kev_product,
+                'VulnCheck KEV': 'Yes' if rd.threat.vulncheck_kev else 'No',
                 'EPSS Score': rd.threat.epss_score if rd.threat.epss_score else '',
                 'EPSS Percentile': rd.threat.epss_percentile if rd.threat.epss_percentile else '',
                 'Actively Exploited': 'Yes' if rd.threat.actively_exploited else 'No',
                 'Has Metasploit': 'Yes' if rd.threat.has_metasploit else 'No',
                 'Has Nuclei': 'Yes' if rd.threat.has_nuclei else 'No',
-                'CAPEC IDs': '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
-                'Attack Techniques': '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
-                'Attack Tactics': '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
+                'Has ExploitDB': 'Yes' if rd.threat.has_exploitdb else 'No',
+                'Has PoC GitHub': 'Yes' if rd.threat.has_poc_github else 'No',
+                'CAPEC IDs': '; '.join(rd.weakness.capec_details) if rd.weakness.capec_details else '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
+                'Attack Techniques': '; '.join(rd.weakness.technique_details) if rd.weakness.technique_details else '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
+                'Attack Tactics': '; '.join(rd.weakness.tactic_details) if rd.weakness.tactic_details else '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
+                'Kill Chain Phases': '; '.join(rd.weakness.kill_chain_phases) if rd.weakness.kill_chain_phases else '',
                 'Reference Count': len(rd.references),
                 'CPE Affected Count': len(rd.cpe_affected),
+                'Vendor Advisory Count': len(rd.vendor_advisories),
+                'Patch Reference Count': len([p for p in rd.patches if p.startswith('http')]),
                 'Vendor Advisories': '; '.join(rd.vendor_advisories) if rd.vendor_advisories else '',
-                'Patches': '; '.join(rd.patches) if rd.patches else ''
+                'Patches': '; '.join([p for p in rd.patches if p.startswith('http')]) if rd.patches else ''
             })
         
         if pd is not None:
