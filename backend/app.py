@@ -121,6 +121,19 @@ async def research_cves(request: CVEResearchRequest):
                 "cpe_affected": rd.cpe_affected,
                 "vendor_advisories": rd.vendor_advisories,
                 "patches": rd.patches,
+                "enhanced_problem_type": {
+                    "primary_weakness": next((p.replace('Primary Weakness: ', '') for p in rd.patches if p.startswith('Primary Weakness:')), ''),
+                    "secondary_weaknesses": next((p.replace('Secondary Weaknesses: ', '') for p in rd.patches if p.startswith('Secondary Weaknesses:')), ''),
+                    "vulnerability_categories": next((p.replace('Vulnerability Categories: ', '') for p in rd.patches if p.startswith('Vulnerability Categories:')), ''),
+                    "impact_types": next((p.replace('Impact Types: ', '') for p in rd.patches if p.startswith('Impact Types:')), ''),
+                    "attack_vectors": next((p.replace('Attack Vectors: ', '') for p in rd.patches if p.startswith('Attack Vectors:')), ''),
+                    "enhanced_cwe_details": '; '.join([p.replace('Enhanced CWE: ', '') for p in rd.patches if p.startswith('Enhanced CWE:')])
+                },
+                "control_mappings": {
+                    "applicable_controls_count": next((p.replace('Applicable Controls Count: ', '') for p in rd.patches if p.startswith('Applicable Controls Count:')), '0'),
+                    "control_categories": next((p.replace('Control Categories: ', '') for p in rd.patches if p.startswith('Control Categories:')), ''),
+                    "top_controls": next((p.replace('Top Controls: ', '') for p in rd.patches if p.startswith('Top Controls:')), '')
+                },
                 "last_enriched": rd.last_enriched.isoformat() if rd.last_enriched else None
             }
             new_data.append(result)
