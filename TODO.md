@@ -222,6 +222,142 @@ Total enhancements implemented in this session: **13 major improvements**
 - Removed redundant webui export format (now uses standard JSON)
 - Added comprehensive csv_row_data to JSON exports for programmatic access
 
+## Post-PR #17 Next Phase Tasks
+
+### ✅ **Gemini Code Assist Feedback Implementation (Medium Priority)**
+Based on comprehensive code review feedback from PR #17:
+
+1. **Data Structure Refactoring**:
+   - Refactor Enhanced Problem Type and Control Mapping data from string parsing to structured fields in ResearchData
+   - Add dedicated dataclass fields instead of storing as formatted strings in patches list
+   - Eliminate string prefix parsing in API and export methods for better type safety
+
+2. **Code Organization Improvements**:
+   - Move urllib.request and csv imports to top-level file imports
+   - Define MITRE ATT&CK to NIST 800-53 mapping URL as class/module constant
+   - Move cwe_categories dictionary to class-level constant in PatrowlConnector
+
+3. **Exception Handling Enhancement**:
+   - Replace broad Exception catches with specific exceptions:
+     - urllib.error.URLError for HTTP requests
+     - csv.Error for CSV parsing issues  
+     - UnicodeDecodeError for text encoding issues
+
+4. **Session Cache Integration**:
+   - Integrate ControlMapper with SessionCache.attack_to_nist_mappings field
+   - Remove unused cache fields or implement proper integration
+   - Ensure consistent caching strategy across all data sources
+
+### 🧹 **Repository Sanitization & Production Readiness (High Priority)**
+Comprehensive cleanup to prepare for production deployment:
+
+1. **File Cleanup**:
+   - Remove all test files, temporary outputs, and development artifacts
+   - Clean up research_output/ directory and test exports
+   - Remove duplicate/obsolete files (old test files, redundant configs)
+   - Organize directory structure for production standards
+
+2. **Documentation Cleanup**:
+   - Consolidate scattered documentation into organized structure
+   - Remove development notes and interim documentation
+   - Prepare comprehensive user documentation and API docs
+
+3. **Code Structure**:
+   - Review and optimize import statements across all files
+   - Remove debug logging and temporary code
+   - Standardize code formatting and style consistency
+   - Optimize performance bottlenecks identified during development
+
+### ✅ **Security Vulnerability Resolution (High Priority)**
+Address GitHub Security Advisories identified by Dependabot:
+
+1. ✅ **Critical Security Issues**:
+   - ✅ Resolved 6 vulnerabilities (2 high, 4 moderate) reported in dependency scan
+   - ✅ Updated ag-grid-community from 30.2.0 to 31.3.4 (fixed prototype pollution vulnerabilities)
+   - ✅ Added npm overrides for nth-check (>=2.0.1), postcss (>=8.4.31), webpack-dev-server (>=5.2.1)
+   - ✅ Validated security fixes with npm audit (0 vulnerabilities found) and frontend build test
+
+2. ✅ **Security Hardening**:
+   - ✅ Updated start_ui.py help text to reflect correct script name
+   - ✅ Verified backend tests still pass after dependency updates
+   - ✅ Confirmed React frontend builds successfully with updated dependencies
+   - ✅ All security vulnerabilities resolved with zero remaining issues
+
+### 🧪 **Comprehensive Testing & Quality Assurance (High Priority)**
+End-to-end validation of all functionality:
+
+1. **Full E2E Regression Testing**:
+   - Test all data source connectors with real CVE data
+   - Validate CSV, Excel, and JSON export formats
+   - Test WebUI functionality across all features
+   - Verify API endpoints and data consistency
+
+2. **Use Case Validation**:
+   - Test with various CVE datasets (small, medium, large)
+   - Validate Enhanced Problem Type parsing accuracy
+   - Test NIST control mapping functionality
+   - Verify data quality and sanitization effectiveness
+
+### 🎨 **Professional Branding & Identity (High Priority)**
+Transform application into professionally branded product:
+
+1. **Application Naming**:
+   - Choose professional application name (move away from "legendary-rotary-phone")
+   - Select appropriate domain/URL structure
+   - Update all references throughout codebase and documentation
+
+2. **Visual Identity & Branding**:
+   - Design professional logo and visual identity
+   - Create consistent branding across WebUI, CLI, and documentation
+   - Implement professional color scheme and typography
+   - Prepare marketing materials and user-facing content
+
+### 📊 **Comprehensive Data Lineage Documentation (High Priority)**
+**Critical Requirement**: Document complete data layer architecture and field provenance.
+
+**Scope**: Create comprehensive documentation mapping every output field to its source data layer with justification for inclusion.
+
+**Structure Required**:
+1. **Data Layer Overview**:
+   - Foundational Layer (CVE Project, Patrowl)
+   - Threat Intelligence Layer (EPSS, CISA KEV, VulnCheck)
+   - Framework Integration Layer (MITRE CWE/CAPEC/ATT&CK)
+   - Enhanced Analysis Layer (Enhanced Problem Type, Control Mapping)
+
+2. **Data Source Mapping** (per layer):
+   - **Source**: Which connector/API provides the data
+   - **Fields**: Complete list of fields sourced from each data source
+   - **Lineage**: How raw data transforms into final output fields
+   - **Value Justification**: Why each field is included and what intelligence it provides
+   - **Dependencies**: Which fields depend on other layers' data
+
+3. **Field-Level Documentation**:
+   - Input format from source
+   - Processing/transformation applied
+   - Output format in CSV/JSON/API
+   - Intelligence value and use cases
+   - Data quality notes and limitations
+
+**Deliverable**: Comprehensive data lineage document serving as both technical reference and intelligence value proposition for users.
+
+## 🎯 **Execution Priority Order (Updated)**
+
+### **Phase 1: Foundation Cleanup (Critical)**
+1. **Repository Sanitization (#12)** - Remove garbage code/files that may contain vulnerabilities
+2. **Address Remaining GitHub Security Advisories (#18)** - Fix legitimate security issues in production code
+3. **Full E2E Regression Testing (#14)** - Ensure functionality after cleanup and security fixes
+
+### **Phase 2: Professional Transformation**  
+4. **Application Naming & Branding (#15)** - Professional identity
+5. **File Cleanup & Organization (#16)** - Production structure  
+6. **Data Lineage Documentation (#13)** - User value proposition
+
+### **Phase 3: Final Polish**
+7. **Production Readiness (#17)** - Deployment preparation
+8. **Code Quality Improvements (#8-11)** - Technical debt resolution
+
+**Rationale**: Repository sanitization first eliminates vulnerabilities in unused/test code, reducing scope of actual security fixes needed.
+
 ## Previous Tasks (2025-06-14)
 
 ### Immediate Actions Required

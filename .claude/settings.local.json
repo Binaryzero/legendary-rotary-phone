@@ -27,7 +27,10 @@
       "Bash(gh api:*)",
       "Bash(git pull:*)",
       "Bash(PYTHONPATH=/Users/william/Tools/legendary-rotary-phone python3 tests/test_error_handling.py)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(awk:*)",
+      "WebFetch(domain:center-for-threat-informed-defense.github.io)",
+      "Bash(true)"
     ],
     "deny": []
   }

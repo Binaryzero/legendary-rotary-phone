@@ -16,7 +16,7 @@ def install_backend_deps():
     try:
         subprocess.run([
             sys.executable, "-m", "pip", "install", 
-            "-r", "requirements-backend.txt"
+            "-r", "requirements.txt"
         ], check=True)
         print("Backend dependencies installed successfully")
         return True
@@ -169,11 +169,11 @@ def main():
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
         print("Usage:")
-        print("  python start_new_ui.py --install                     # Install dependencies")
-        print("  python start_new_ui.py                               # Start the application")
-        print("  python start_new_ui.py --frontend-port 3001          # Use custom frontend port")
-        print("  python start_new_ui.py --backend-port 8001           # Use custom backend port")
-        print("  python start_new_ui.py --frontend-port 3001 --backend-port 8001  # Use custom ports")
-        print("  python start_new_ui.py --help                        # Show this help")
+        print("  python start_ui.py --install                     # Install dependencies")
+        print("  python start_ui.py                               # Start the application")
+        print("  python start_ui.py --frontend-port 3001          # Use custom frontend port")
+        print("  python start_ui.py --backend-port 8001           # Use custom backend port")
+        print("  python start_ui.py --frontend-port 3001 --backend-port 8001  # Use custom ports")
+        print("  python start_ui.py --help                        # Show this help")
     else:
         main()
