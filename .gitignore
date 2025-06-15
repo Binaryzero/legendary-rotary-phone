@@ -151,4 +151,5 @@ bandit-report.json
 *.temp
 archive/*
 frontend/node_modules/*
+.claude/*
 .claude/settings.local.json

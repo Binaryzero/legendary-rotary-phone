@@ -110,8 +110,18 @@ async def research_cves(request: CVEResearchRequest):
                 },
                 "threat": {
                     "in_kev": rd.threat.in_kev,
+                    "vulncheck_kev": rd.threat.vulncheck_kev,
                     "epss_score": rd.threat.epss_score,
                     "epss_percentile": rd.threat.epss_percentile,
+                    "vedas_score": rd.threat.vedas_score,
+                    "vedas_percentile": rd.threat.vedas_percentile,
+                    "vedas_score_change": rd.threat.vedas_score_change,
+                    "vedas_detail_url": rd.threat.vedas_detail_url,
+                    "vedas_date": rd.threat.vedas_date,
+                    "temporal_score": rd.threat.temporal_score,
+                    "exploit_code_maturity": rd.threat.exploit_code_maturity,
+                    "remediation_level": rd.threat.remediation_level,
+                    "report_confidence": rd.threat.report_confidence,
                     "actively_exploited": rd.threat.actively_exploited,
                     "has_metasploit": rd.threat.has_metasploit,
                     "has_nuclei": rd.threat.has_nuclei,
@@ -127,17 +137,25 @@ async def research_cves(request: CVEResearchRequest):
                 "vendor_advisories": rd.vendor_advisories,
                 "patches": rd.patches,
                 "enhanced_problem_type": {
-                    "primary_weakness": next((p.replace('Primary Weakness: ', '') for p in rd.patches if p.startswith('Primary Weakness:')), ''),
-                    "secondary_weaknesses": next((p.replace('Secondary Weaknesses: ', '') for p in rd.patches if p.startswith('Secondary Weaknesses:')), ''),
-                    "vulnerability_categories": next((p.replace('Vulnerability Categories: ', '') for p in rd.patches if p.startswith('Vulnerability Categories:')), ''),
-                    "impact_types": next((p.replace('Impact Types: ', '') for p in rd.patches if p.startswith('Impact Types:')), ''),
-                    "attack_vectors": next((p.replace('Attack Vectors: ', '') for p in rd.patches if p.startswith('Attack Vectors:')), ''),
-                    "enhanced_cwe_details": '; '.join([p.replace('Enhanced CWE: ', '') for p in rd.patches if p.startswith('Enhanced CWE:')])
+                    "primary_weakness": rd.enhanced_problem_type.primary_weakness,
+                    "secondary_weaknesses": '; '.join(rd.enhanced_problem_type.secondary_weaknesses),
+                    "vulnerability_categories": '; '.join(rd.enhanced_problem_type.vulnerability_categories),
+                    "impact_types": '; '.join(rd.enhanced_problem_type.impact_types),
+                    "attack_vectors": '; '.join(rd.enhanced_problem_type.attack_vectors),
+                    "enhanced_cwe_details": '; '.join(rd.enhanced_problem_type.enhanced_cwe_details)
                 },
                 "control_mappings": {
-                    "applicable_controls_count": next((p.replace('Applicable Controls Count: ', '') for p in rd.patches if p.startswith('Applicable Controls Count:')), '0'),
-                    "control_categories": next((p.replace('Control Categories: ', '') for p in rd.patches if p.startswith('Control Categories:')), ''),
-                    "top_controls": next((p.replace('Top Controls: ', '') for p in rd.patches if p.startswith('Top Controls:')), '')
+                    "applicable_controls_count": str(rd.control_mappings.applicable_controls_count),
+                    "control_categories": '; '.join(rd.control_mappings.control_categories),
+                    "top_controls": '; '.join(rd.control_mappings.top_controls)
+                },
+                "product_intelligence": {
+                    "vendors": rd.product_intelligence.vendors,
+                    "products": rd.product_intelligence.products,
+                    "affected_versions": rd.product_intelligence.affected_versions,
+                    "platforms": rd.product_intelligence.platforms,
+                    "modules": rd.product_intelligence.modules,
+                    "repositories": rd.product_intelligence.repositories
                 },
                 "last_enriched": rd.last_enriched.isoformat() if rd.last_enriched else None
             }

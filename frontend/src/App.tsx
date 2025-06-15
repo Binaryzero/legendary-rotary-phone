@@ -16,8 +16,18 @@ interface CVEData {
   last_modified?: string;
   threat: {
     in_kev: boolean;
+    vulncheck_kev: boolean;
     epss_score: number | null;
     epss_percentile: number | null;
+    vedas_score: number | null;
+    vedas_percentile: number | null;
+    vedas_score_change: number | null;
+    vedas_detail_url: string;
+    vedas_date: string | null;
+    temporal_score: number | null;
+    exploit_code_maturity: string;
+    remediation_level: string;
+    report_confidence: string;
     actively_exploited: boolean;
     has_metasploit: boolean;
     has_nuclei: boolean;
@@ -48,6 +58,14 @@ interface CVEData {
     applicable_controls_count: string;
     control_categories: string;
     top_controls: string;
+  };
+  product_intelligence: {
+    vendors: string[];
+    products: string[];
+    affected_versions: string[];
+    platforms: string[];
+    modules: string[];
+    repositories: string[];
   };
   exploit_maturity?: string;
   cpe_affected?: string;
@@ -118,7 +136,7 @@ const App: React.FC = () => {
     {
       field: 'cve_id',
       headerName: 'CVE ID',
-      width: 160,
+      width: 200,
       pinned: 'left',
       cellRenderer: (params: any) => (
         <button 
@@ -128,6 +146,15 @@ const App: React.FC = () => {
             setSelectedCve(params.data);
             setSelectedCveIndex(index);
           }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--accent-blue)',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontSize: '1.3rem',
+            fontWeight: '600'
+          }}
         >
           {params.value}
         </button>
@@ -136,162 +163,113 @@ const App: React.FC = () => {
     {
       field: 'severity',
       headerName: 'Severity',
-      width: 120,
+      width: 180,
       cellRenderer: (params: any) => (
-        <span className={`severity-badge ${params.value?.toLowerCase()}`}>
+        <span className={`severity-badge ${params.value?.toLowerCase()}`} style={{
+          fontSize: '1.2rem',
+          padding: '0.4rem 0.8rem'
+        }}>
           {params.value}
         </span>
       )
     },
     {
       field: 'cvss_score',
-      headerName: 'CVSS',
-      width: 90,
-      type: 'numericColumn'
+      headerName: 'CVSS Score',
+      width: 160,
+      type: 'numericColumn',
+      cellRenderer: (params: any) => (
+        <span style={{ fontWeight: '600', fontSize: '1.3rem' }}>
+          {params.value || 'N/A'}
+        </span>
+      )
     },
     {
       field: 'threat.in_kev',
       headerName: 'CISA KEV',
-      width: 110,
-      cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
-    },
-    {
-      field: 'exploits',
-      headerName: 'Exploits',
-      width: 100,
-      valueGetter: (params: any) => params.data.exploits?.length || 0
-    },
-    {
-      field: 'patches',
-      headerName: 'Patches',
-      width: 100,
-      valueGetter: (params: any) => params.data.patches?.length || 0
-    },
-    {
-      field: 'threat.epss_score',
-      headerName: 'EPSS',
-      width: 90,
-      type: 'numericColumn',
-      valueFormatter: (params: any) => 
-        params.value ? params.value.toFixed(3) : 'N/A'
-    },
-    {
-      field: 'threat.epss_percentile',
-      headerName: 'EPSS %',
-      width: 80,
-      type: 'numericColumn',
-      valueFormatter: (params: any) => 
-        params.value ? `${(params.value * 100).toFixed(1)}%` : 'N/A'
-    },
-    {
-      field: 'exploit_maturity',
-      headerName: 'Maturity',
-      width: 110,
-      cellRenderer: (params: any) => {
-        const maturity = params.value || 'unproven';
-        const colorMap = {
-          weaponized: '#ef4444',
-          functional: '#f59e0b', 
-          poc: '#10b981',
-          unproven: '#6b7280'
-        };
-        return (
-          <span style={{ 
-            color: colorMap[maturity as keyof typeof colorMap] || '#6b7280',
-            fontWeight: '600',
-            textTransform: 'capitalize'
-          }}>
-            {maturity}
-          </span>
-        );
-      }
-    },
-    {
-      field: 'threat.has_metasploit',
-      headerName: 'MSF',
-      width: 70,
-      cellRenderer: (params: any) => (
-        <span style={{ 
-          color: params.value ? '#ef4444' : '#6b7280',
-          fontWeight: '600'
-        }}>
-          {params.value ? '●' : '○'}
-        </span>
-      )
-    },
-    {
-      field: 'threat.has_nuclei',
-      headerName: 'Nuclei',
-      width: 80,
-      cellRenderer: (params: any) => (
-        <span style={{ 
-          color: params.value ? '#f59e0b' : '#6b7280',
-          fontWeight: '600'
-        }}>
-          {params.value ? '●' : '○'}
-        </span>
-      )
-    },
-    {
-      field: 'enhanced_problem_type.primary_weakness',
-      headerName: 'Primary Weakness',
-      width: 180,
-      cellRenderer: (params: any) => params.value || 'N/A'
-    },
-    {
-      field: 'enhanced_problem_type.vulnerability_categories',
-      headerName: 'Vulnerability Categories',
-      width: 200,
-      cellRenderer: (params: any) => (
-        <div className="categories-cell" title={params.value}>
-          {params.value || 'N/A'}
-        </div>
-      )
-    },
-    {
-      field: 'enhanced_problem_type.impact_types',
-      headerName: 'Impact Types',
       width: 160,
       cellRenderer: (params: any) => (
-        <div className="impact-cell" title={params.value}>
-          {params.value || 'N/A'}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px',
+          justifyContent: 'center'
+        }}>
+          <span style={{ 
+            fontWeight: '700',
+            color: params.value ? '#ff6b6b' : '#666',
+            fontSize: '1.6rem'
+          }}>
+            {params.value ? '●' : '○'}
+          </span>
+          <span style={{ 
+            fontSize: '1.2rem',
+            fontWeight: '600',
+            color: params.value ? '#ff6b6b' : '#666'
+          }}>
+            {params.value ? 'YES' : 'NO'}
+          </span>
         </div>
       )
     },
     {
-      field: 'enhanced_problem_type.attack_vectors',
-      headerName: 'Attack Vectors',
-      width: 150,
-      cellRenderer: (params: any) => (
-        <div className="vectors-cell" title={params.value}>
-          {params.value || 'N/A'}
-        </div>
-      )
-    },
-    {
-      field: 'control_mappings.applicable_controls_count',
-      headerName: 'Controls Count',
-      width: 120,
+      field: 'threat.vedas_score',
+      headerName: 'VEDAS Score',
+      width: 160,
       type: 'numericColumn',
-      cellRenderer: (params: any) => params.value || '0'
+      cellRenderer: (params: any) => (
+        <span style={{ fontWeight: '600', fontSize: '1.3rem' }}>
+          {params.value ? params.value.toFixed(4) : 'N/A'}
+        </span>
+      )
     },
     {
-      field: 'control_mappings.control_categories',
-      headerName: 'Control Categories',
+      field: 'threat.vedas_percentile',
+      headerName: 'VEDAS %ile',
+      width: 160,
+      type: 'numericColumn',
+      cellRenderer: (params: any) => (
+        <span style={{ fontWeight: '600', fontSize: '1.3rem' }}>
+          {params.value ? (params.value * 100).toFixed(1) + '%' : 'N/A'}
+        </span>
+      )
+    },
+    {
+      field: 'threat.temporal_score',
+      headerName: 'Temporal CVSS',
+      width: 160,
+      type: 'numericColumn',
+      cellRenderer: (params: any) => (
+        <span style={{ fontWeight: '600', fontSize: '1.3rem' }}>
+          {params.value ? params.value.toFixed(1) : 'N/A'}
+        </span>
+      )
+    },
+    {
+      field: 'product_intelligence.vendors',
+      headerName: 'Vendors',
       width: 180,
       cellRenderer: (params: any) => (
-        <div className="control-categories-cell" title={params.value}>
-          {params.value || 'N/A'}
-        </div>
+        <span style={{ fontSize: '1.2rem' }}>
+          {params.value && params.value.length > 0 ? params.value.slice(0, 2).join(', ') + (params.value.length > 2 ? '...' : '') : 'N/A'}
+        </span>
       )
     },
     {
       field: 'description',
       headerName: 'Description',
       flex: 1,
-      minWidth: 300,
+      minWidth: 500,
+      wrapText: true,
+      autoHeight: true,
       cellRenderer: (params: any) => (
-        <div className="description-cell" title={params.value}>
+        <div style={{ 
+          fontSize: '1.3rem',
+          lineHeight: '1.6',
+          padding: '4px 0',
+          wordWrap: 'break-word',
+          whiteSpace: 'normal'
+        }}>
           {params.value}
         </div>
       )
@@ -596,7 +574,7 @@ const App: React.FC = () => {
                   border: 'none',
                   borderRadius: '6px',
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  fontSize: '1rem',
+                  fontSize: '1.3rem',
                   fontWeight: '600',
                   transition: 'background-color 0.2s ease'
                 }}
@@ -606,7 +584,7 @@ const App: React.FC = () => {
               
               <div style={{ 
                 color: 'var(--text-muted)', 
-                fontSize: '0.9rem',
+                fontSize: '1.2rem',
                 maxWidth: '300px',
                 lineHeight: '1.4'
               }}>
@@ -666,7 +644,7 @@ const App: React.FC = () => {
               borderRadius: '6px',
               fontWeight: '600',
               cursor: 'pointer',
-              fontSize: '1rem',
+              fontSize: '1.3rem',
               transition: 'background-color 0.2s ease'
             }}
             onMouseOver={(e) => e.currentTarget.style.background = 'var(--brand-accent-hover)'}
@@ -683,19 +661,29 @@ const App: React.FC = () => {
 
       <div className="main-content">
         <div className="data-grid">
-          <div className="ag-theme-alpine" style={{ height: '600px', width: '100%' }}>
+          <div className="ag-theme-alpine" style={{ height: 'calc(100vh - 280px)', width: '100%' }}>
             <AgGridReact
               rowData={rowData}
               columnDefs={columnDefs}
               suppressRowHoverHighlight={false}
               suppressColumnVirtualisation={false}
               enableCellTextSelection={true}
+              domLayout="normal"
+              headerHeight={60}
+              rowHeight={75}
               defaultColDef={{
                 sortable: true,
                 filter: false,
-                resizable: true
+                resizable: true,
+                suppressSizeToFit: false
               }}
               pagination={false}
+              onGridReady={(params) => {
+                params.api.sizeColumnsToFit();
+              }}
+              onGridSizeChanged={(params) => {
+                params.api.sizeColumnsToFit();
+              }}
             />
           </div>
 
@@ -796,6 +784,10 @@ const App: React.FC = () => {
                     <div className="metric-value">{selectedCve.threat.epss_score?.toFixed(3) || 'N/A'}</div>
                   </div>
                   <div className="metric-card">
+                    <div className="metric-label">VEDAS Score</div>
+                    <div className="metric-value">{selectedCve.threat.vedas_score?.toFixed(3) || 'N/A'}</div>
+                  </div>
+                  <div className="metric-card">
                     <div className="metric-label">CISA KEV</div>
                     <div className={`metric-value ${selectedCve.threat.in_kev ? 'kev-yes' : ''}`}>
                       {selectedCve.threat.in_kev ? 'Yes' : 'No'}
@@ -840,6 +832,63 @@ const App: React.FC = () => {
                         <strong>EPSS Percentile</strong>
                         <span>{selectedCve.threat.epss_percentile ? `${(selectedCve.threat.epss_percentile * 100).toFixed(1)}%` : 'N/A'}</span>
                       </div>
+                      <div className="field-row">
+                        <strong>VEDAS Percentile</strong>
+                        <span>{selectedCve.threat.vedas_percentile ? `${(selectedCve.threat.vedas_percentile * 100).toFixed(1)}%` : 'N/A'}</span>
+                      </div>
+                      <div className="field-row">
+                        <strong>VEDAS Score Change</strong>
+                        <span style={{ 
+                          color: selectedCve.threat.vedas_score_change && selectedCve.threat.vedas_score_change > 0 ? '#ef4444' : 
+                                 selectedCve.threat.vedas_score_change && selectedCve.threat.vedas_score_change < 0 ? '#10b981' : 'inherit'
+                        }}>
+                          {selectedCve.threat.vedas_score_change ? 
+                            (selectedCve.threat.vedas_score_change > 0 ? '+' : '') + selectedCve.threat.vedas_score_change.toFixed(4) : 'N/A'}
+                        </span>
+                      </div>
+                      {selectedCve.threat.vedas_detail_url && (
+                        <div className="field-row">
+                          <strong>VEDAS Details</strong>
+                          <a href={selectedCve.threat.vedas_detail_url} target="_blank" rel="noopener noreferrer" 
+                             style={{ color: 'var(--accent-blue)', textDecoration: 'underline' }}>
+                            View Detailed Analysis
+                          </a>
+                        </div>
+                      )}
+                      {selectedCve.threat.temporal_score && (
+                        <div className="field-row">
+                          <strong>Temporal CVSS Score</strong>
+                          <span style={{ fontWeight: '600' }}>
+                            {selectedCve.threat.temporal_score.toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+                      {selectedCve.threat.exploit_code_maturity && (
+                        <div className="field-row">
+                          <strong>Exploit Code Maturity</strong>
+                          <span style={{ 
+                            textTransform: 'capitalize',
+                            fontWeight: '600',
+                            color: selectedCve.threat.exploit_code_maturity.toLowerCase() === 'high' ? '#ef4444' : 
+                                   selectedCve.threat.exploit_code_maturity.toLowerCase() === 'functional' ? '#f59e0b' :
+                                   selectedCve.threat.exploit_code_maturity.toLowerCase() === 'proof-of-concept' ? '#10b981' : 'inherit'
+                          }}>
+                            {selectedCve.threat.exploit_code_maturity}
+                          </span>
+                        </div>
+                      )}
+                      {selectedCve.threat.remediation_level && (
+                        <div className="field-row">
+                          <strong>Remediation Level</strong>
+                          <span>{selectedCve.threat.remediation_level}</span>
+                        </div>
+                      )}
+                      {selectedCve.threat.report_confidence && (
+                        <div className="field-row">
+                          <strong>Report Confidence</strong>
+                          <span>{selectedCve.threat.report_confidence}</span>
+                        </div>
+                      )}
                       <div className="field-row">
                         <strong>Exploit Maturity</strong>
                         <span style={{ 
@@ -1098,6 +1147,96 @@ const App: React.FC = () => {
                   )}
                 </div>
 
+                {/* Product Intelligence Section */}
+                <div className="collapsible-section">
+                  <button 
+                    className="section-header"
+                    onClick={() => toggleSection('product_intelligence')}
+                  >
+                    <span>Product Intelligence</span>
+                    <span className={`expand-caret ${expandedSections.product_intelligence ? 'expanded' : ''}`}>
+                      ▶
+                    </span>
+                  </button>
+                  {expandedSections.product_intelligence && (
+                    <div className="section-content">
+                      {selectedCve.product_intelligence?.vendors?.length > 0 && (
+                        <div className="field-row">
+                          <strong>Affected Vendors</strong>
+                          <div className="tag-list">
+                            {selectedCve.product_intelligence.vendors.map((vendor, index) => (
+                              <span key={index} className="tag vendor-tag">{vendor}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCve.product_intelligence?.products?.length > 0 && (
+                        <div className="field-row">
+                          <strong>Affected Products</strong>
+                          <div className="tag-list">
+                            {selectedCve.product_intelligence.products.map((product, index) => (
+                              <span key={index} className="tag product-tag">{product}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCve.product_intelligence?.affected_versions?.length > 0 && (
+                        <div className="field-row">
+                          <strong>Affected Versions</strong>
+                          <div className="tag-list">
+                            {selectedCve.product_intelligence.affected_versions.map((version, index) => (
+                              <span key={index} className="tag version-tag">{version}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCve.product_intelligence?.platforms?.length > 0 && (
+                        <div className="field-row">
+                          <strong>Platforms</strong>
+                          <div className="tag-list">
+                            {selectedCve.product_intelligence.platforms.map((platform, index) => (
+                              <span key={index} className="tag platform-tag">{platform}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCve.product_intelligence?.modules?.length > 0 && (
+                        <div className="field-row">
+                          <strong>Modules</strong>
+                          <div className="tag-list">
+                            {selectedCve.product_intelligence.modules.map((module, index) => (
+                              <span key={index} className="tag module-tag">{module}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCve.product_intelligence?.repositories?.length > 0 && (
+                        <div className="field-row">
+                          <strong>Repositories</strong>
+                          <div className="tag-list">
+                            {selectedCve.product_intelligence.repositories.map((repo, index) => (
+                              <a key={index} href={repo} target="_blank" rel="noopener noreferrer" 
+                                 className="tag repo-tag" style={{ textDecoration: 'none' }}>
+                                {repo}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(!selectedCve.product_intelligence?.vendors?.length && 
+                        !selectedCve.product_intelligence?.products?.length &&
+                        !selectedCve.product_intelligence?.affected_versions?.length &&
+                        !selectedCve.product_intelligence?.platforms?.length &&
+                        !selectedCve.product_intelligence?.modules?.length &&
+                        !selectedCve.product_intelligence?.repositories?.length) && (
+                        <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem' }}>
+                          No detailed product intelligence available
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* References & Advisories Section */}
                 <div className="collapsible-section">
                   <button 
@@ -1144,7 +1283,7 @@ const App: React.FC = () => {
                                     style={{ 
                                       color: 'var(--brand-secondary)', 
                                       textDecoration: 'none',
-                                      fontSize: '1rem',
+                                      fontSize: '1.3rem',
                                       lineHeight: '1.5',
                                       wordBreak: 'break-all'
                                     }}
@@ -1155,7 +1294,7 @@ const App: React.FC = () => {
                               ))}
                               <div style={{ 
                                 color: 'var(--text-muted)', 
-                                fontSize: '0.9rem', 
+                                fontSize: '1.2rem', 
                                 fontStyle: 'italic',
                                 marginTop: '1rem',
                                 textAlign: 'center',
