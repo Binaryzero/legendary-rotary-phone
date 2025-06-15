@@ -6,6 +6,7 @@
 - [x] Fix package structure (pyproject.toml or directory reorganization) to resolve pip install errors
 - [x] Stage and commit current changes on feature/fill-empty-columns branch
 - [x] Create PR for feature/fill-empty-columns branch to merge enhancements to main
+- [x] Create PR for React + FastAPI migration ([PR #14](https://github.com/Binaryzero/legendary-rotary-phone/pull/14))
 - [x] Revisit web UI after package structure fix
 - [x] Create enterprise-grade Streamlit UI to replace basic web UI
 - [x] Fix UI layout, text sizing, and usability issues
