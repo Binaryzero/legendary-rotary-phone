@@ -456,7 +456,11 @@ class CVEProjectConnector(DataSourceConnector):
             return {}
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse CVE JSON 5.x format."""
+        """
+        Parses CVE JSON 5.x data to extract vulnerability details and structured product intelligence.
+        
+        Extracts the vulnerability description, CVSS score and vector, CWE identifiers and descriptions, categorized references (including patches, vendor advisories, mitigations, and fix versions), affected products, CPE-style identifiers, publication and modification dates, and detailed product intelligence such as vendors, products, versions, platforms, modules, and repositories.
+        """
         if not data:
             return {}
         
@@ -1380,7 +1384,11 @@ class ThreatContextConnector(DataSourceConnector):
             logger.warning(f"Error loading EPSS data: {e}")
     
     async def fetch(self, cve_id: str, session: Any) -> Dict[str, Any]:
-        """Fetch threat context from GitHub sources."""
+        """
+        Asynchronously fetches EPSS and VEDAS threat context data for a given CVE ID.
+        
+        Retrieves EPSS and VEDAS scores from the session cache, loading data from GitHub sources if necessary. Returns a dictionary containing EPSS and VEDAS threat intelligence metrics for the specified CVE.
+        """
         # Load EPSS data if not already loaded
         await self._load_epss_data(session)
         
@@ -1408,7 +1416,11 @@ class ThreatContextConnector(DataSourceConnector):
         return data
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse threat context data."""
+        """
+        Parses threat context data for a CVE, extracting EPSS and VEDAS threat intelligence metrics.
+        
+        Returns a dictionary containing threat context fields such as KEV status, EPSS score and percentile, VEDAS score, percentile, score change, detail URL, date, and active exploitation flag.
+        """
         vedas_data = data.get("vedas", {})
         threat = {
             "in_kev": data.get("in_kev", False),
@@ -1441,7 +1453,11 @@ class CVSSBTConnector(DataSourceConnector):
         self.session_cache = session_cache
     
     async def _load_cvss_data(self, session: Any) -> None:
-        """Load CVSS data from t0sche/cvss-bt GitHub repo."""
+        """
+        Asynchronously loads CVSS-BT enrichment data from the t0sche/cvss-bt GitHub repository and populates the internal cache with CVSS base, CVSS-BT, and temporal metrics for CVEs.
+        
+        If available, uses session cache to avoid redundant downloads. Updates the session cache and internal statistics after successful loading.
+        """
         # Check session cache first
         if self.session_cache and self.session_cache.cvss_bt_data:
             self.cvss_cache = self.session_cache.cvss_bt_data
@@ -1525,7 +1541,14 @@ class CVSSBTConnector(DataSourceConnector):
         return {}
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse CVSS-BT data."""
+        """
+        Parses CVSS-BT enrichment data for a given CVE.
+        
+        Extracts base and CVSS-BT scores, vectors, severity, assigner, publication date, and threat context including KEV status, EPSS score, temporal CVSS metrics, and exploit availability indicators.
+        
+        Returns:
+            A dictionary containing parsed CVSS-BT and threat context data for the specified CVE.
+        """
         if not data:
             return {}
         
@@ -2037,7 +2060,11 @@ class VulnerabilityResearchEngine:
         return research_data
     
     def _build_research_data(self, cve_id: str, results: Dict[DataLayer, Dict[str, Any]]) -> ResearchData:
-        """Build ResearchData from multi-source results with graceful fallbacks."""
+        """
+        Aggregates and synthesizes vulnerability intelligence from multiple data layers into a comprehensive ResearchData object for a given CVE.
+        
+        This method merges foundational CVE data, exploit information, threat context, weakness and tactics mappings, raw intelligence, and enhanced metadata. It applies prioritized fallbacks for CVSS scoring, integrates structured product and vulnerability classification, enriches with exploit and threat intelligence, and maps applicable NIST 800-53 controls based on ATT&CK techniques. The resulting ResearchData instance provides a unified, structured view of all available intelligence for the specified CVE.
+        """
         # Start with foundational data
         foundational = results.get(DataLayer.FOUNDATIONAL, {})
         raw_intelligence = results.get(DataLayer.RAW_INTELLIGENCE, {})
@@ -2764,7 +2791,17 @@ class ResearchReportGenerator:
         return text
 
     def _generate_export_row(self, rd: ResearchData) -> Dict[str, Any]:
-        """Generate a standardized row of data for CSV/Excel export with all fields."""
+        """
+        Generates a standardized dictionary representing a single CVE's data for CSV or Excel export.
+        
+        The export row includes core CVE details, CVSS metrics, threat intelligence, exploit information, enhanced vulnerability classification, NIST 800-53 control mappings, and detailed product intelligence. Fields are formatted and sanitized for compatibility with tabular data exports.
+        
+        Args:
+            rd: The ResearchData object containing aggregated vulnerability intelligence.
+        
+        Returns:
+            A dictionary mapping column names to values for export.
+        """
         # Extract fix/upgrade references
         fix_versions = []
         mitigations = []
@@ -2881,7 +2918,16 @@ class ResearchReportGenerator:
         }
 
     def _export_csv(self, data: List[ResearchData], path: Path) -> None:
-        """Export to CSV format with all fields using standardized row generation."""
+        """
+        Exports research data to a CSV file with standardized fields.
+        
+        Args:
+            data: List of ResearchData objects to export.
+            path: Destination file path for the CSV output.
+        
+        Raises:
+            RuntimeError: If pandas is not available.
+        """
         rows = []
         for rd in data:
             rows.append(self._generate_export_row(rd))

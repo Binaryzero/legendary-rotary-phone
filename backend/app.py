@@ -71,7 +71,20 @@ async def root():
 
 @app.post("/api/research")
 async def research_cves(request: CVEResearchRequest):
-    """Research CVEs and store results."""
+    """
+    Researches a batch of CVEs using the vulnerability research toolkit and stores the results.
+    
+    Validates toolkit availability and input, performs asynchronous research on the provided CVE IDs, and structures the results with detailed vulnerability, threat, and product intelligence information. Newly researched CVEs are added to the in-memory data store, avoiding duplicates.
+    
+    Args:
+        request: Contains a list of CVE IDs to research.
+    
+    Returns:
+        A dictionary indicating success, the number of newly researched CVEs, the total stored, and a status message.
+    
+    Raises:
+        HTTPException: If the toolkit is unavailable, no CVE IDs are provided, or research fails.
+    """
     global research_data
     
     if not TOOLKIT_AVAILABLE:
@@ -351,14 +364,23 @@ async def get_mitre_analytics():
 
 @app.delete("/api/data")
 async def clear_data():
-    """Clear all research data."""
+    """
+    Removes all stored CVE research data from memory.
+    
+    Returns:
+        A dictionary indicating success and a confirmation message.
+    """
     global research_data
     research_data = []
     return {"status": "success", "message": "All data cleared"}
 
 @app.post("/api/load-data")
 async def load_data(data: List[Dict[str, Any]]):
-    """Load research data directly (for JSON file uploads)."""
+    """
+    Replaces all stored CVE research data with the provided list.
+    
+    Validates that each item in the input list is a dictionary containing a 'cve_id' field. On success, clears the existing in-memory data and loads the new data. Returns a success response with the count of loaded CVEs. Raises an HTTP 400 error for invalid input format and HTTP 500 for unexpected errors.
+    """
     global research_data
     
     try:
