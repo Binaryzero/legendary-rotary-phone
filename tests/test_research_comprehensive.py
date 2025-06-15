@@ -6,21 +6,24 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Add the parent directory to sys.path so we can import the package
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 
 def test_core_functionality() -> bool:
     """Test core functionality without external dependencies."""
     print("=== Testing Core Functionality ===")
 
     try:
-        from cve_research_toolkit_fixed import (
+        from cve_research_toolkit.models.data import (
             DataLayer,
             ExploitReference,
             ResearchData,
-            ResearchReportGenerator,
             ThreatContext,
-            VulnerabilityResearchEngine,
             WeaknessTactics,
         )
+        from cve_research_toolkit.reporting.generator import ResearchReportGenerator
+        from cve_research_toolkit.core.engine import VulnerabilityResearchEngine
 
         print("PASS All core classes imported successfully")
     except ImportError as e:
@@ -87,7 +90,8 @@ def test_export_functionality() -> bool:
     print("\n=== Testing Export Functionality ===")
 
     try:
-        from cve_research_toolkit_fixed import ResearchData, ResearchReportGenerator
+        from cve_research_toolkit.models.data import ResearchData
+        from cve_research_toolkit.reporting.generator import ResearchReportGenerator
 
         # Create test data
         rd1 = ResearchData(
@@ -192,12 +196,10 @@ def test_connectors() -> bool:
     print("\n=== Testing Data Source Connectors ===")
 
     try:
-        from cve_research_toolkit_fixed import (
-            CVEProjectConnector,
-            MITREConnector,
-            ThreatContextConnector,
-            TrickestConnector,
-        )
+        from cve_research_toolkit.connectors.cve_project import CVEProjectConnector
+        from cve_research_toolkit.connectors.mitre import MITREConnector
+        from cve_research_toolkit.connectors.threat_context import ThreatContextConnector
+        from cve_research_toolkit.connectors.trickest import TrickestConnector
 
         # Test connector instantiation
         cve_connector = CVEProjectConnector()
@@ -276,7 +278,7 @@ def test_data_validation() -> bool:
     print("\n=== Testing Data Validation ===")
 
     try:
-        from cve_research_toolkit_fixed import ResearchData, ExploitReference
+        from cve_research_toolkit.models.data import ResearchData, ExploitReference
 
         # Test data validation
         test_data = ResearchData(cve_id="CVE-2021-44228", cvss_score=10.0)
@@ -328,7 +330,7 @@ def test_cli_integration() -> bool:
     print("\n=== Testing CLI Integration ===")
 
     try:
-        from cve_research_toolkit_fixed import cli_main, main_research as main
+        from cve_research_toolkit.cli import cli_main, main_research as main
 
         # Create test input
         test_file = Path("test_cli_input.txt")
@@ -376,16 +378,50 @@ def test_dependency_handling() -> bool:
     print("\n=== Testing Dependency Handling ===")
 
     try:
-        from cve_research_toolkit_fixed import (
-            RICH_AVAILABLE,
-            Console,
-            Panel,
-            Table,
-            aiohttp,
-            click,
-            pd,
-            yaml,
-        )
+        # Test console utilities
+        from cve_research_toolkit.utils.console import create_console
+        
+        # Test optional dependencies availability
+        try:
+            import aiohttp
+        except ImportError:
+            aiohttp = None
+            
+        try:
+            import click
+        except ImportError:
+            click = None
+            
+        try:
+            import pandas as pd
+        except ImportError:
+            pd = None
+            
+        try:
+            import yaml
+        except ImportError:
+            yaml = None
+            
+        try:
+            from rich.console import Console as RichConsole
+            from rich.panel import Panel
+            from rich.table import Table
+            RICH_AVAILABLE = True
+            Console = RichConsole
+        except ImportError:
+            RICH_AVAILABLE = False
+            class Console:
+                def print(self, *args):
+                    print(*args)
+            class Panel:
+                @staticmethod
+                def fit(text):
+                    return text
+            class Table:
+                def add_column(self, *args):
+                    pass
+                def add_row(self, *args):
+                    pass
 
         # Test dependency flags
         deps = {
