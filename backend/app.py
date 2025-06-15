@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI(
-    title="CVE Research Toolkit API",
-    description="High-performance vulnerability intelligence API with advanced filtering and pagination",
+    title="ODIN API",
+    description="OSINT Data Intelligence Nexus - High-performance vulnerability intelligence API with advanced filtering and pagination",
     version="2.0.0"
 )
 
@@ -71,7 +71,20 @@ async def root():
 
 @app.post("/api/research")
 async def research_cves(request: CVEResearchRequest):
-    """Research CVEs and store results."""
+    """
+    Researches a batch of CVEs using the vulnerability research toolkit and stores the results.
+    
+    Validates toolkit availability and input, performs asynchronous research on the provided CVE IDs, and structures the results with detailed vulnerability, threat, and product intelligence information. Newly researched CVEs are added to the in-memory data store, avoiding duplicates.
+    
+    Args:
+        request: Contains a list of CVE IDs to research.
+    
+    Returns:
+        A dictionary indicating success, the number of newly researched CVEs, the total stored, and a status message.
+    
+    Raises:
+        HTTPException: If the toolkit is unavailable, no CVE IDs are provided, or research fails.
+    """
     global research_data
     
     if not TOOLKIT_AVAILABLE:
@@ -110,11 +123,26 @@ async def research_cves(request: CVEResearchRequest):
                 },
                 "threat": {
                     "in_kev": rd.threat.in_kev,
+                    "vulncheck_kev": rd.threat.vulncheck_kev,
                     "epss_score": rd.threat.epss_score,
                     "epss_percentile": rd.threat.epss_percentile,
+                    "vedas_score": rd.threat.vedas_score,
+                    "vedas_percentile": rd.threat.vedas_percentile,
+                    "vedas_score_change": rd.threat.vedas_score_change,
+                    "vedas_detail_url": rd.threat.vedas_detail_url,
+                    "vedas_date": rd.threat.vedas_date,
+                    "temporal_score": rd.threat.temporal_score,
+                    "exploit_code_maturity": rd.threat.exploit_code_maturity,
+                    "remediation_level": rd.threat.remediation_level,
+                    "report_confidence": rd.threat.report_confidence,
                     "actively_exploited": rd.threat.actively_exploited,
                     "has_metasploit": rd.threat.has_metasploit,
-                    "has_nuclei": rd.threat.has_nuclei
+                    "has_nuclei": rd.threat.has_nuclei,
+                    "ransomware_campaign": rd.threat.ransomware_campaign,
+                    "kev_vulnerability_name": rd.threat.kev_vulnerability_name,
+                    "kev_short_description": rd.threat.kev_short_description,
+                    "kev_vendor_project": rd.threat.kev_vendor_project,
+                    "kev_product": rd.threat.kev_product
                 },
                 "exploits": [{"url": exp.url, "source": exp.source, "type": exp.type} for exp in rd.exploits],
                 "exploit_maturity": rd.exploit_maturity,
@@ -122,17 +150,25 @@ async def research_cves(request: CVEResearchRequest):
                 "vendor_advisories": rd.vendor_advisories,
                 "patches": rd.patches,
                 "enhanced_problem_type": {
-                    "primary_weakness": next((p.replace('Primary Weakness: ', '') for p in rd.patches if p.startswith('Primary Weakness:')), ''),
-                    "secondary_weaknesses": next((p.replace('Secondary Weaknesses: ', '') for p in rd.patches if p.startswith('Secondary Weaknesses:')), ''),
-                    "vulnerability_categories": next((p.replace('Vulnerability Categories: ', '') for p in rd.patches if p.startswith('Vulnerability Categories:')), ''),
-                    "impact_types": next((p.replace('Impact Types: ', '') for p in rd.patches if p.startswith('Impact Types:')), ''),
-                    "attack_vectors": next((p.replace('Attack Vectors: ', '') for p in rd.patches if p.startswith('Attack Vectors:')), ''),
-                    "enhanced_cwe_details": '; '.join([p.replace('Enhanced CWE: ', '') for p in rd.patches if p.startswith('Enhanced CWE:')])
+                    "primary_weakness": rd.enhanced_problem_type.primary_weakness,
+                    "secondary_weaknesses": '; '.join(rd.enhanced_problem_type.secondary_weaknesses),
+                    "vulnerability_categories": '; '.join(rd.enhanced_problem_type.vulnerability_categories),
+                    "impact_types": '; '.join(rd.enhanced_problem_type.impact_types),
+                    "attack_vectors": '; '.join(rd.enhanced_problem_type.attack_vectors),
+                    "enhanced_cwe_details": '; '.join(rd.enhanced_problem_type.enhanced_cwe_details)
                 },
                 "control_mappings": {
-                    "applicable_controls_count": next((p.replace('Applicable Controls Count: ', '') for p in rd.patches if p.startswith('Applicable Controls Count:')), '0'),
-                    "control_categories": next((p.replace('Control Categories: ', '') for p in rd.patches if p.startswith('Control Categories:')), ''),
-                    "top_controls": next((p.replace('Top Controls: ', '') for p in rd.patches if p.startswith('Top Controls:')), '')
+                    "applicable_controls_count": str(rd.control_mappings.applicable_controls_count),
+                    "control_categories": '; '.join(rd.control_mappings.control_categories),
+                    "top_controls": '; '.join(rd.control_mappings.top_controls)
+                },
+                "product_intelligence": {
+                    "vendors": rd.product_intelligence.vendors,
+                    "products": rd.product_intelligence.products,
+                    "affected_versions": rd.product_intelligence.affected_versions,
+                    "platforms": rd.product_intelligence.platforms,
+                    "modules": rd.product_intelligence.modules,
+                    "repositories": rd.product_intelligence.repositories
                 },
                 "last_enriched": rd.last_enriched.isoformat() if rd.last_enriched else None
             }
@@ -328,10 +364,45 @@ async def get_mitre_analytics():
 
 @app.delete("/api/data")
 async def clear_data():
-    """Clear all research data."""
+    """
+    Removes all stored CVE research data from memory.
+    
+    Returns:
+        A dictionary indicating success and a confirmation message.
+    """
     global research_data
     research_data = []
     return {"status": "success", "message": "All data cleared"}
+
+@app.post("/api/load-data")
+async def load_data(data: List[Dict[str, Any]]):
+    """
+    Replaces all stored CVE research data with the provided list.
+    
+    Validates that each item in the input list is a dictionary containing a 'cve_id' field. On success, clears the existing in-memory data and loads the new data. Returns a success response with the count of loaded CVEs. Raises an HTTP 400 error for invalid input format and HTTP 500 for unexpected errors.
+    """
+    global research_data
+    
+    try:
+        # Validate the data structure
+        for item in data:
+            if not isinstance(item, dict) or 'cve_id' not in item:
+                raise HTTPException(status_code=400, detail="Invalid data format. Each item must have a 'cve_id' field.")
+        
+        # Clear existing data and load new data
+        research_data = data
+        
+        logger.info(f"Loaded {len(data)} CVEs from uploaded data")
+        
+        return {
+            "status": "success",
+            "loaded": len(data),
+            "message": f"Successfully loaded {len(data)} CVEs"
+        }
+    
+    except Exception as e:
+        logger.error(f"Data loading failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Data loading failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

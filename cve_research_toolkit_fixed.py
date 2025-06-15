@@ -263,6 +263,15 @@ class ThreatContext:
     epss_score: Optional[float] = None
     epss_percentile: Optional[float] = None
     vedas_score: Optional[float] = None
+    vedas_percentile: Optional[float] = None
+    vedas_score_change: Optional[float] = None
+    vedas_detail_url: str = ""
+    vedas_date: Optional[str] = None
+    # Temporal CVSS metrics
+    temporal_score: Optional[float] = None
+    exploit_code_maturity: str = ""
+    remediation_level: str = ""
+    report_confidence: str = ""
     has_metasploit: bool = False
     has_nuclei: bool = False
     has_exploitdb: bool = False
@@ -289,6 +298,36 @@ class WeaknessTactics:
     capec_details: List[str] = field(default_factory=list)
     technique_details: List[str] = field(default_factory=list)
     tactic_details: List[str] = field(default_factory=list)
+
+
+@dataclass
+class EnhancedProblemType:
+    """Enhanced problem type analysis with structured vulnerability classification."""
+    primary_weakness: str = ""
+    secondary_weaknesses: List[str] = field(default_factory=list)
+    vulnerability_categories: List[str] = field(default_factory=list)
+    impact_types: List[str] = field(default_factory=list)
+    attack_vectors: List[str] = field(default_factory=list)
+    enhanced_cwe_details: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ControlMappings:
+    """NIST 800-53 control mappings for risk assessment."""
+    applicable_controls_count: int = 0
+    control_categories: List[str] = field(default_factory=list)
+    top_controls: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ProductIntelligence:
+    """Enhanced product and platform intelligence from CVE affected objects."""
+    vendors: List[str] = field(default_factory=list)
+    products: List[str] = field(default_factory=list)
+    affected_versions: List[str] = field(default_factory=list)
+    platforms: List[str] = field(default_factory=list)
+    modules: List[str] = field(default_factory=list)
+    repositories: List[str] = field(default_factory=list)
 
 
 
@@ -321,6 +360,10 @@ class ResearchData:
     vendor_advisories: List[str] = field(default_factory=list)
     patches: List[str] = field(default_factory=list)
     
+    # Enhanced Analysis (Structured Fields)
+    enhanced_problem_type: EnhancedProblemType = field(default_factory=EnhancedProblemType)
+    control_mappings: ControlMappings = field(default_factory=ControlMappings)
+    product_intelligence: ProductIntelligence = field(default_factory=ProductIntelligence)
     
     # Research Metadata
     last_enriched: Optional[datetime] = None
@@ -413,7 +456,11 @@ class CVEProjectConnector(DataSourceConnector):
             return {}
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse CVE JSON 5.x format."""
+        """
+        Parses CVE JSON 5.x data to extract vulnerability details and structured product intelligence.
+        
+        Extracts the vulnerability description, CVSS score and vector, CWE identifiers and descriptions, categorized references (including patches, vendor advisories, mitigations, and fix versions), affected products, CPE-style identifiers, publication and modification dates, and detailed product intelligence such as vendors, products, versions, platforms, modules, and repositories.
+        """
         if not data:
             return {}
         
@@ -519,9 +566,17 @@ class CVEProjectConnector(DataSourceConnector):
             elif any(pattern in url_lower for pattern in ["mitigation", "workaround", "guidance"]):
                 mitigations.append(url)
         
-        # Extract affected products (CVE 5.0 format)
+        # Extract affected products (CVE 5.0 format) - Enhanced with structured data
         affected_products = []
         cpe_affected = []
+        
+        # Product intelligence extraction
+        vendors = []
+        products = []
+        affected_versions = []
+        platforms = []
+        modules = []
+        repositories = []
         
         for product in cna.get("affected", []):
             vendor = product.get("vendor", "")
@@ -535,6 +590,29 @@ class CVEProjectConnector(DataSourceConnector):
                 # Note: This isn't a full CPE but provides affected product info
                 cpe_affected.append(f"cpe:2.3:a:{vendor.lower().replace(' ', '_')}:{product_name.lower().replace(' ', '_')}:*:*:*:*:*:*:*:*")
                 
+                # Extract structured product intelligence
+                if vendor not in vendors:
+                    vendors.append(vendor)
+                if product_name not in products:
+                    products.append(product_name)
+                
+                # Extract repository information
+                repo_url = product.get("repo", "")
+                if repo_url and repo_url not in repositories:
+                    repositories.append(repo_url)
+                
+                # Extract platform information
+                product_platforms = product.get("platforms", [])
+                for platform in product_platforms:
+                    if platform not in platforms:
+                        platforms.append(platform)
+                
+                # Extract module information
+                product_modules = product.get("modules", [])
+                for module in product_modules:
+                    if module not in modules:
+                        modules.append(module)
+                
                 # Add version information if available
                 versions = product.get("versions", [])
                 if versions:
@@ -544,6 +622,9 @@ class CVEProjectConnector(DataSourceConnector):
                         status = version.get("status", "")
                         if version_str:
                             version_info.append(f"{version_str} ({status})" if status else version_str)
+                            # Add to structured version list
+                            if version_str not in affected_versions:
+                                affected_versions.append(version_str)
                     if version_info:
                         affected_products.append(f"  Versions: {', '.join(version_info)}")
         
@@ -566,7 +647,16 @@ class CVEProjectConnector(DataSourceConnector):
             "published_date": published,
             "last_modified": modified,
             "affected_products": affected_products,
-            "cpe_affected": cpe_affected
+            "cpe_affected": cpe_affected,
+            # Enhanced product intelligence
+            "product_intelligence": {
+                "vendors": vendors,
+                "products": products,
+                "affected_versions": affected_versions,
+                "platforms": platforms,
+                "modules": modules,
+                "repositories": repositories
+            }
         }
         
         logger.debug(f"{cve_id} parsed: CVSS={cvss_score}, desc_length={len(description)}, refs={len(references)}")
@@ -1294,18 +1384,30 @@ class ThreatContextConnector(DataSourceConnector):
             logger.warning(f"Error loading EPSS data: {e}")
     
     async def fetch(self, cve_id: str, session: Any) -> Dict[str, Any]:
-        """Fetch threat context from GitHub sources."""
+        """
+        Asynchronously fetches EPSS and VEDAS threat context data for a given CVE ID.
+        
+        Retrieves EPSS and VEDAS scores from the session cache, loading data from GitHub sources if necessary. Returns a dictionary containing EPSS and VEDAS threat intelligence metrics for the specified CVE.
+        """
         # Load EPSS data if not already loaded
         await self._load_epss_data(session)
         
         data = {}
         
-        # Get EPSS score from cache
+        # Get EPSS and VEDAS scores from cache
         if cve_id in self.epss_cache:
             epss_data = self.epss_cache[cve_id]
             data["epss"] = {
                 "score": epss_data.get("epss", 0.0),
-                "percentile": epss_data.get("percentile", 0.0)  # Will calculate if available
+                "percentile": epss_data.get("percentile", 0.0)
+            }
+            # Extract VEDAS data
+            data["vedas"] = {
+                "score": epss_data.get("vedas_score"),
+                "percentile": epss_data.get("vedas_percentile"),
+                "score_change": epss_data.get("vedas_score_change"),
+                "detail_url": epss_data.get("vedas_detail_url", ""),
+                "date": epss_data.get("vedas_date")
             }
         
         # CISA KEV data is now handled by MITREConnector
@@ -1314,11 +1416,21 @@ class ThreatContextConnector(DataSourceConnector):
         return data
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse threat context data."""
+        """
+        Parses threat context data for a CVE, extracting EPSS and VEDAS threat intelligence metrics.
+        
+        Returns a dictionary containing threat context fields such as KEV status, EPSS score and percentile, VEDAS score, percentile, score change, detail URL, date, and active exploitation flag.
+        """
+        vedas_data = data.get("vedas", {})
         threat = {
             "in_kev": data.get("in_kev", False),
             "epss_score": data.get("epss", {}).get("score"),
             "epss_percentile": data.get("epss", {}).get("percentile"),
+            "vedas_score": vedas_data.get("score"),
+            "vedas_percentile": vedas_data.get("percentile"),
+            "vedas_score_change": vedas_data.get("score_change"),
+            "vedas_detail_url": vedas_data.get("detail_url", ""),
+            "vedas_date": vedas_data.get("date"),
             "actively_exploited": data.get("in_kev", False)
         }
         return {"threat": threat}
@@ -1341,7 +1453,11 @@ class CVSSBTConnector(DataSourceConnector):
         self.session_cache = session_cache
     
     async def _load_cvss_data(self, session: Any) -> None:
-        """Load CVSS data from t0sche/cvss-bt GitHub repo."""
+        """
+        Asynchronously loads CVSS-BT enrichment data from the t0sche/cvss-bt GitHub repository and populates the internal cache with CVSS base, CVSS-BT, and temporal metrics for CVEs.
+        
+        If available, uses session cache to avoid redundant downloads. Updates the session cache and internal statistics after successful loading.
+        """
         # Check session cache first
         if self.session_cache and self.session_cache.cvss_bt_data:
             self.cvss_cache = self.session_cache.cvss_bt_data
@@ -1385,6 +1501,11 @@ class CVSSBTConnector(DataSourceConnector):
                                 'cvss_bt_score': safe_float(row.get('cvss-bt_score')),
                                 'cvss_bt_severity': row.get('cvss-bt_severity', ''),
                                 'cvss_bt_vector': row.get('cvss-bt_vector', ''),
+                                # Temporal CVSS metrics
+                                'temporal_score': safe_float(row.get('temporal_score')),
+                                'exploit_code_maturity': row.get('exploit_code_maturity', ''),
+                                'remediation_level': row.get('remediation_level', ''),
+                                'report_confidence': row.get('report_confidence', ''),
                                 'assigner': row.get('assigner', ''),
                                 'published_date': row.get('published_date', ''),
                                 'epss': safe_float(row.get('epss')),
@@ -1420,7 +1541,14 @@ class CVSSBTConnector(DataSourceConnector):
         return {}
     
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse CVSS-BT data."""
+        """
+        Parses CVSS-BT enrichment data for a given CVE.
+        
+        Extracts base and CVSS-BT scores, vectors, severity, assigner, publication date, and threat context including KEV status, EPSS score, temporal CVSS metrics, and exploit availability indicators.
+        
+        Returns:
+            A dictionary containing parsed CVSS-BT and threat context data for the specified CVE.
+        """
         if not data:
             return {}
         
@@ -1437,6 +1565,10 @@ class CVSSBTConnector(DataSourceConnector):
                 "in_kev": data.get("cisa_kev", False),
                 "vulncheck_kev": data.get("vulncheck_kev", False),
                 "epss_score": data.get("epss", 0.0),
+                "temporal_score": data.get("temporal_score"),
+                "exploit_code_maturity": data.get("exploit_code_maturity", ""),
+                "remediation_level": data.get("remediation_level", ""),
+                "report_confidence": data.get("report_confidence", ""),
                 "has_metasploit": data.get("metasploit", False),
                 "has_exploitdb": data.get("exploitdb", False),
                 "has_nuclei": data.get("nuclei", False),
@@ -1928,7 +2060,11 @@ class VulnerabilityResearchEngine:
         return research_data
     
     def _build_research_data(self, cve_id: str, results: Dict[DataLayer, Dict[str, Any]]) -> ResearchData:
-        """Build ResearchData from multi-source results with graceful fallbacks."""
+        """
+        Aggregates and synthesizes vulnerability intelligence from multiple data layers into a comprehensive ResearchData object for a given CVE.
+        
+        This method merges foundational CVE data, exploit information, threat context, weakness and tactics mappings, raw intelligence, and enhanced metadata. It applies prioritized fallbacks for CVSS scoring, integrates structured product and vulnerability classification, enriches with exploit and threat intelligence, and maps applicable NIST 800-53 controls based on ATT&CK techniques. The resulting ResearchData instance provides a unified, structured view of all available intelligence for the specified CVE.
+        """
         # Start with foundational data
         foundational = results.get(DataLayer.FOUNDATIONAL, {})
         raw_intelligence = results.get(DataLayer.RAW_INTELLIGENCE, {})
@@ -2001,6 +2137,16 @@ class VulnerabilityResearchEngine:
         foundational_cpe = foundational.get("cpe_affected", [])
         research_data.cpe_affected.extend(foundational_cpe)
         
+        # Extract structured product intelligence from foundational data
+        product_intel = foundational.get("product_intelligence", {})
+        if product_intel:
+            research_data.product_intelligence.vendors = product_intel.get("vendors", [])
+            research_data.product_intelligence.products = product_intel.get("products", [])
+            research_data.product_intelligence.affected_versions = product_intel.get("affected_versions", [])
+            research_data.product_intelligence.platforms = product_intel.get("platforms", [])
+            research_data.product_intelligence.modules = product_intel.get("modules", [])
+            research_data.product_intelligence.repositories = product_intel.get("repositories", [])
+        
         # Add enhanced data from Patrowl (Layer 5 - Raw Intelligence)
         if raw_intelligence:
             # Merge CPE affected products
@@ -2043,33 +2189,21 @@ class VulnerabilityResearchEngine:
             structured_cwe_data = raw_intelligence.get("structured_cwe_data", [])
             vulnerability_classification = raw_intelligence.get("vulnerability_classification", {})
             
-            # Store structured CWE data as metadata for CSV export
+            # Store structured CWE data in enhanced problem type field
             if structured_cwe_data:
+                enhanced_cwe_details = []
                 for cwe_data in structured_cwe_data:
                     cwe_detail = f"{cwe_data['cwe_id']}: {cwe_data['description']} (Category: {cwe_data['category']}, Severity: {cwe_data['severity_indicator']})"
-                    research_data.patches.append(f"Enhanced CWE: {cwe_detail}")
+                    enhanced_cwe_details.append(cwe_detail)
+                research_data.enhanced_problem_type.enhanced_cwe_details = enhanced_cwe_details
             
-            # Store vulnerability classification data
+            # Store vulnerability classification data in structured fields
             if vulnerability_classification:
-                primary_weakness = vulnerability_classification.get("primary_weakness", "")
-                if primary_weakness:
-                    research_data.patches.append(f"Primary Weakness: {primary_weakness}")
-                
-                secondary_weaknesses = vulnerability_classification.get("secondary_weaknesses", [])
-                if secondary_weaknesses:
-                    research_data.patches.append(f"Secondary Weaknesses: {'; '.join(secondary_weaknesses)}")
-                
-                vuln_categories = vulnerability_classification.get("vulnerability_categories", [])
-                if vuln_categories:
-                    research_data.patches.append(f"Vulnerability Categories: {'; '.join(set(vuln_categories))}")
-                
-                impact_types = vulnerability_classification.get("impact_types", [])
-                if impact_types:
-                    research_data.patches.append(f"Impact Types: {'; '.join(set(impact_types))}")
-                
-                attack_vectors = vulnerability_classification.get("attack_vectors", [])
-                if attack_vectors:
-                    research_data.patches.append(f"Attack Vectors: {'; '.join(set(attack_vectors))}")
+                research_data.enhanced_problem_type.primary_weakness = vulnerability_classification.get("primary_weakness", "")
+                research_data.enhanced_problem_type.secondary_weaknesses = vulnerability_classification.get("secondary_weaknesses", [])
+                research_data.enhanced_problem_type.vulnerability_categories = vulnerability_classification.get("vulnerability_categories", [])
+                research_data.enhanced_problem_type.impact_types = vulnerability_classification.get("impact_types", [])
+                research_data.enhanced_problem_type.attack_vectors = vulnerability_classification.get("attack_vectors", [])
         
         # Add exploit data with error handling and enhanced metadata
         exploit_data = results.get(DataLayer.EXPLOIT_MECHANICS, {})
@@ -2233,13 +2367,12 @@ class VulnerabilityResearchEngine:
         if research_data.weakness.attack_techniques:
             control_mappings = self.control_mapper.get_controls_for_techniques(research_data.weakness.attack_techniques)
             
-            # Store control data as metadata in patches field for CSV export
-            if control_mappings['applicable_controls_count'] > 0:
-                research_data.patches.append(f"Applicable Controls Count: {control_mappings['applicable_controls_count']}")
+            # Store control data in structured control mappings field
+            research_data.control_mappings.applicable_controls_count = control_mappings['applicable_controls_count']
             if control_mappings['control_categories']:
-                research_data.patches.append(f"Control Categories: {control_mappings['control_categories']}")
+                research_data.control_mappings.control_categories = control_mappings['control_categories'].split('; ')
             if control_mappings['top_controls']:
-                research_data.patches.append(f"Top Controls: {control_mappings['top_controls']}")
+                research_data.control_mappings.top_controls = control_mappings['top_controls'].split('; ')
         
         return research_data
     
@@ -2658,7 +2791,17 @@ class ResearchReportGenerator:
         return text
 
     def _generate_export_row(self, rd: ResearchData) -> Dict[str, Any]:
-        """Generate a standardized row of data for CSV/Excel export with all fields."""
+        """
+        Generates a standardized dictionary representing a single CVE's data for CSV or Excel export.
+        
+        The export row includes core CVE details, CVSS metrics, threat intelligence, exploit information, enhanced vulnerability classification, NIST 800-53 control mappings, and detailed product intelligence. Fields are formatted and sanitized for compatibility with tabular data exports.
+        
+        Args:
+            rd: The ResearchData object containing aggregated vulnerability intelligence.
+        
+        Returns:
+            A dictionary mapping column names to values for export.
+        """
         # Extract fix/upgrade references
         fix_versions = []
         mitigations = []
@@ -2727,6 +2870,15 @@ class ResearchReportGenerator:
             'VulnCheck KEV': 'Yes' if rd.threat.vulncheck_kev else 'No',
             'EPSS Score': rd.threat.epss_score if rd.threat.epss_score else '',
             'EPSS Percentile': rd.threat.epss_percentile if rd.threat.epss_percentile else '',
+            'VEDAS Score': rd.threat.vedas_score if rd.threat.vedas_score else '',
+            'VEDAS Percentile': rd.threat.vedas_percentile if rd.threat.vedas_percentile else '',
+            'VEDAS Score Change': rd.threat.vedas_score_change if rd.threat.vedas_score_change else '',
+            'VEDAS Detail URL': self._sanitize_csv_text(rd.threat.vedas_detail_url or ''),
+            'VEDAS Date': rd.threat.vedas_date if rd.threat.vedas_date else '',
+            'Temporal CVSS Score': rd.threat.temporal_score if rd.threat.temporal_score else '',
+            'Exploit Code Maturity': rd.threat.exploit_code_maturity or '',
+            'Remediation Level': rd.threat.remediation_level or '',
+            'Report Confidence': rd.threat.report_confidence or '',
             'Actively Exploited': 'Yes' if rd.threat.actively_exploited else 'No',
             'Has Metasploit': 'Yes' if rd.threat.has_metasploit else 'No',
             'Has Nuclei': 'Yes' if rd.threat.has_nuclei else 'No',
@@ -2743,22 +2895,39 @@ class ResearchReportGenerator:
             'Vendor Advisories': self._sanitize_csv_text('; '.join(rd.vendor_advisories) if rd.vendor_advisories else ''),
             'Patches': self._sanitize_csv_text('; '.join([p for p in rd.patches if p.startswith('http')]) if rd.patches else ''),
             
-            # Enhanced Problem Type Analysis fields
-            'Primary Weakness': self._sanitize_csv_text(next((p.replace('Primary Weakness: ', '') for p in rd.patches if p.startswith('Primary Weakness:')), '')),
-            'Secondary Weaknesses': self._sanitize_csv_text(next((p.replace('Secondary Weaknesses: ', '') for p in rd.patches if p.startswith('Secondary Weaknesses:')), '')),
-            'Vulnerability Categories': self._sanitize_csv_text(next((p.replace('Vulnerability Categories: ', '') for p in rd.patches if p.startswith('Vulnerability Categories:')), '')),
-            'Impact Types': self._sanitize_csv_text(next((p.replace('Impact Types: ', '') for p in rd.patches if p.startswith('Impact Types:')), '')),
-            'Attack Vectors (Classification)': self._sanitize_csv_text(next((p.replace('Attack Vectors: ', '') for p in rd.patches if p.startswith('Attack Vectors:')), '')),
-            'Enhanced CWE Details': self._sanitize_csv_text('; '.join([p.replace('Enhanced CWE: ', '') for p in rd.patches if p.startswith('Enhanced CWE:')])),
+            # Enhanced Problem Type Analysis fields (from structured data)
+            'Primary Weakness': self._sanitize_csv_text(rd.enhanced_problem_type.primary_weakness),
+            'Secondary Weaknesses': self._sanitize_csv_text('; '.join(rd.enhanced_problem_type.secondary_weaknesses)),
+            'Vulnerability Categories': self._sanitize_csv_text('; '.join(rd.enhanced_problem_type.vulnerability_categories)),
+            'Impact Types': self._sanitize_csv_text('; '.join(rd.enhanced_problem_type.impact_types)),
+            'Attack Vectors (Classification)': self._sanitize_csv_text('; '.join(rd.enhanced_problem_type.attack_vectors)),
+            'Enhanced CWE Details': self._sanitize_csv_text('; '.join(rd.enhanced_problem_type.enhanced_cwe_details)),
             
-            # NIST 800-53 Control Mapping fields
-            'Applicable_Controls_Count': next((p.replace('Applicable Controls Count: ', '') for p in rd.patches if p.startswith('Applicable Controls Count:')), '0'),
-            'Control_Categories': self._sanitize_csv_text(next((p.replace('Control Categories: ', '') for p in rd.patches if p.startswith('Control Categories:')), '')),
-            'Top_Controls': self._sanitize_csv_text(next((p.replace('Top Controls: ', '') for p in rd.patches if p.startswith('Top Controls:')), ''))
+            # NIST 800-53 Control Mapping fields (from structured data)
+            'Applicable_Controls_Count': str(rd.control_mappings.applicable_controls_count),
+            'Control_Categories': self._sanitize_csv_text('; '.join(rd.control_mappings.control_categories)),
+            'Top_Controls': self._sanitize_csv_text('; '.join(rd.control_mappings.top_controls)),
+            
+            # Enhanced Product Intelligence fields (from structured data)
+            'Affected Vendors': self._sanitize_csv_text('; '.join(rd.product_intelligence.vendors)),
+            'Affected Products': self._sanitize_csv_text('; '.join(rd.product_intelligence.products)),
+            'Affected Versions': self._sanitize_csv_text('; '.join(rd.product_intelligence.affected_versions)),
+            'Affected Platforms': self._sanitize_csv_text('; '.join(rd.product_intelligence.platforms)),
+            'Affected Modules': self._sanitize_csv_text('; '.join(rd.product_intelligence.modules)),
+            'Source Repositories': self._sanitize_csv_text('; '.join(rd.product_intelligence.repositories))
         }
 
     def _export_csv(self, data: List[ResearchData], path: Path) -> None:
-        """Export to CSV format with all fields using standardized row generation."""
+        """
+        Exports research data to a CSV file with standardized fields.
+        
+        Args:
+            data: List of ResearchData objects to export.
+            path: Destination file path for the CSV output.
+        
+        Raises:
+            RuntimeError: If pandas is not available.
+        """
         rows = []
         for rd in data:
             rows.append(self._generate_export_row(rd))

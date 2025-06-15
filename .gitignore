@@ -141,9 +141,9 @@ dmypy.json
 *~
 
 # Project specific
-# research_output/
+research_output/
 *.xlsx
-#*.csv
+*.csv
 bandit-report.json
 
 # Temporary files
@@ -151,3 +151,5 @@ bandit-report.json
 *.temp
 archive/*
 frontend/node_modules/*
+.claude/*
+.claude/settings.local.json
