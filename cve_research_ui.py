@@ -348,7 +348,7 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
 <body>
     <div class="container">
         <header>
-            <h1>🔍 CVE Research Toolkit</h1>
+            <h1>CVE Research Toolkit</h1>
             <p>Interactive Vulnerability Intelligence Analysis</p>
         </header>
         
@@ -1068,7 +1068,7 @@ class CVEResearchUIServer:
             if open_browser:
                 webbrowser.open(f"http://{self.host}:{self.port}")
             
-            print(f"🌐 CVE Research UI available at: http://{self.host}:{self.port}")
+            print(f"CVE Research UI available at: http://{self.host}:{self.port}")
             print("Press Ctrl+C to stop the server")
             
         except OSError as e:

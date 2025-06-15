@@ -6,12 +6,13 @@ import pytest
 from unittest.mock import patch
 
 # dynamically load the module under test, so it can be imported below
-fetcher = types.ModuleType("cve_metadata_fetcher")
-module_path = Path(__file__).parent.parent / "cve_metadata_fetcher.py"
+fetcher = types.ModuleType("cve_research_toolkit_fixed")
+module_path = Path(__file__).parent.parent / "cve_research_toolkit_fixed.py"
 exec(module_path.read_text(), fetcher.__dict__)
-sys.modules["cve_metadata_fetcher"] = fetcher
+sys.modules["cve_research_toolkit_fixed"] = fetcher
 
-from cve_metadata_fetcher import parse_cve, CveMetadata, fetch_cve, main
+# Import what we need for legacy test compatibility
+from cve_research_toolkit_fixed import ResearchData as CveMetadata, main_research as main
 
 LEGACY_JSON = {
     "containers": {

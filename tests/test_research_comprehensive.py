@@ -25,9 +25,9 @@ def test_core_functionality() -> bool:
         from cve_research_toolkit.reporting.generator import ResearchReportGenerator
         from cve_research_toolkit.core.engine import VulnerabilityResearchEngine
 
-        print("✓ All core classes imported successfully")
+        print("PASS All core classes imported successfully")
     except ImportError as e:
-        print(f"✗ Core import failed: {e}")
+        print(f"FAIL Core import failed: {e}")
         return False
 
     # Test data structure creation
@@ -50,22 +50,22 @@ def test_core_functionality() -> bool:
         rd.threat.in_kev = True
         rd.threat.epss_score = 0.95
 
-        print("✓ Data structures created successfully")
+        print("PASS Data structures created successfully")
 
     except Exception as e:
-        print(f"✗ Data structure creation failed: {e}")
+        print(f"FAIL Data structure creation failed: {e}")
         return False
 
     # Test data structure operations (cache removed)
     try:
         if rd.cve_id == "CVE-2021-44228":
-            print("✓ Data structure operations working correctly")
+            print("PASS Data structure operations working correctly")
         else:
-            print("✗ Data structure verification failed")
+            print("FAIL Data structure verification failed")
             return False
 
     except Exception as e:
-        print(f"✗ Data structure operations failed: {e}")
+        print(f"FAIL Data structure operations failed: {e}")
         return False
 
     # Test report generation
@@ -75,13 +75,13 @@ def test_core_functionality() -> bool:
         # Test summary table generation
         test_data = [rd]
         table = generator.generate_summary_table(test_data)
-        print("✓ Report generation working")
+        print("PASS Report generation working")
 
     except Exception as e:
-        print(f"✗ Report generation failed: {e}")
+        print(f"FAIL Report generation failed: {e}")
         return False
 
-    print("✓ All core functionality tests passed!")
+    print("PASS All core functionality tests passed!")
     return True
 
 
@@ -125,12 +125,12 @@ def test_export_functionality() -> bool:
             with open(output_dir / "test.json") as f:
                 json_data = json.load(f)
                 if len(json_data) == 2 and json_data[0]["cve_id"] == "CVE-2021-44228":
-                    print("✓ JSON export working correctly")
+                    print("PASS JSON export working correctly")
                 else:
-                    print("✗ JSON export content incorrect")
+                    print("FAIL JSON export content incorrect")
                     return False
         except Exception as e:
-            print(f"✗ JSON export failed: {e}")
+            print(f"FAIL JSON export failed: {e}")
             return False
 
         # Test CSV export
@@ -140,12 +140,12 @@ def test_export_functionality() -> bool:
             # Verify CSV was created
             csv_file = output_dir / "test.csv"
             if csv_file.exists() and csv_file.stat().st_size > 0:
-                print("✓ CSV export working correctly")
+                print("PASS CSV export working correctly")
             else:
-                print("✗ CSV export failed")
+                print("FAIL CSV export failed")
                 return False
         except Exception as e:
-            print(f"✗ CSV export failed: {e}")
+            print(f"FAIL CSV export failed: {e}")
             return False
 
         # Test Markdown export
@@ -159,23 +159,23 @@ def test_export_functionality() -> bool:
             if md_file.exists():
                 content = md_file.read_text()
                 if "CVE-2021-44228" in content and "Critical Severity: 2" in content:
-                    print("✓ Markdown export working correctly")
+                    print("PASS Markdown export working correctly")
                 else:
-                    print("✗ Markdown export content incorrect")
+                    print("FAIL Markdown export content incorrect")
                     return False
             else:
-                print("✗ Markdown export failed")
+                print("FAIL Markdown export failed")
                 return False
         except Exception as e:
-            print(f"✗ Markdown export failed: {e}")
+            print(f"FAIL Markdown export failed: {e}")
             return False
 
         # Test Excel export (will use fallback if openpyxl not available)
         try:
             generator.export_research_data(test_data, "excel", output_dir / "test.xlsx")
-            print("✓ Excel export completed (with or without openpyxl)")
+            print("PASS Excel export completed (with or without openpyxl)")
         except Exception as e:
-            print(f"✗ Excel export failed: {e}")
+            print(f"FAIL Excel export failed: {e}")
             return False
 
         # Cleanup
@@ -184,10 +184,10 @@ def test_export_functionality() -> bool:
         shutil.rmtree(output_dir, ignore_errors=True)
 
     except Exception as e:
-        print(f"✗ Export functionality test failed: {e}")
+        print(f"FAIL Export functionality test failed: {e}")
         return False
 
-    print("✓ All export functionality tests passed!")
+    print("PASS All export functionality tests passed!")
     return True
 
 
@@ -207,7 +207,7 @@ def test_connectors() -> bool:
         mitre_connector = MITREConnector()
         threat_connector = ThreatContextConnector()
 
-        print("✓ All connectors instantiated successfully")
+        print("PASS All connectors instantiated successfully")
 
         # Test parsing with sample data
         sample_cve_data = {
@@ -230,9 +230,9 @@ def test_connectors() -> bool:
 
         parsed = cve_connector.parse("CVE-2023-0001", sample_cve_data)
         if parsed.get("description") == "Test vulnerability description":
-            print("✓ CVE connector parsing working")
+            print("PASS CVE connector parsing working")
         else:
-            print("✗ CVE connector parsing failed")
+            print("FAIL CVE connector parsing failed")
             return False
 
         # Test Trickest parsing
@@ -242,17 +242,17 @@ def test_connectors() -> bool:
 
         parsed = trickest_connector.parse("CVE-2023-0001", trickest_data)
         if len(parsed.get("exploits", [])) == 2:
-            print("✓ Trickest connector parsing working")
+            print("PASS Trickest connector parsing working")
         else:
-            print("✗ Trickest connector parsing failed")
+            print("FAIL Trickest connector parsing failed")
             return False
 
         # Test MITRE connector (returns placeholder data)
         parsed = mitre_connector.parse("CVE-2023-0001", {})
         if "cwe_ids" in parsed:
-            print("✓ MITRE connector working")
+            print("PASS MITRE connector working")
         else:
-            print("✗ MITRE connector failed")
+            print("FAIL MITRE connector failed")
             return False
 
         # Test threat context connector
@@ -260,16 +260,16 @@ def test_connectors() -> bool:
 
         parsed = threat_connector.parse("CVE-2023-0001", threat_data)
         if parsed.get("threat", {}).get("in_kev") is True:
-            print("✓ Threat context connector working")
+            print("PASS Threat context connector working")
         else:
-            print("✗ Threat context connector failed")
+            print("FAIL Threat context connector failed")
             return False
 
     except Exception as e:
-        print(f"✗ Connector testing failed: {e}")
+        print(f"FAIL Connector testing failed: {e}")
         return False
 
-    print("✓ All connector tests passed!")
+    print("PASS All connector tests passed!")
     return True
 
 
@@ -295,16 +295,16 @@ def test_data_validation() -> bool:
         
         # Validate basic properties
         if test_data.cve_id and test_data.cvss_score > 0:
-            print("✓ Basic data validation working")
+            print("PASS Basic data validation working")
         else:
-            print("✗ Basic data validation failed")
+            print("FAIL Basic data validation failed")
             return False
         
         # Validate exploit data
         if len(test_data.exploits) == 1 and test_data.exploits[0].url:
-            print("✓ Exploit data validation working")
+            print("PASS Exploit data validation working")
         else:
-            print("✗ Exploit data validation failed")
+            print("FAIL Exploit data validation failed")
             return False
         
         # Validate threat context
@@ -312,16 +312,16 @@ def test_data_validation() -> bool:
         test_data.threat.epss_score = 0.95
         
         if test_data.threat.in_kev and test_data.threat.epss_score > 0.9:
-            print("✓ Threat context validation working")
+            print("PASS Threat context validation working")
         else:
-            print("✗ Threat context validation failed")
+            print("FAIL Threat context validation failed")
             return False
 
     except Exception as e:
-        print(f"✗ Data validation test failed: {e}")
+        print(f"FAIL Data validation test failed: {e}")
         return False
 
-    print("✓ Data validation tests passed!")
+    print("PASS Data validation tests passed!")
     return True
 
 
@@ -343,19 +343,19 @@ def test_cli_integration() -> bool:
                 format=["json"],
                 output_dir="test_cli_output",
             )
-            print("✓ Main function CLI working")
+            print("PASS Main function CLI working")
         except Exception as e:
             # Expected if aiohttp is not available
             if "aiohttp" in str(e).lower():
-                print("✓ Main function CLI working (aiohttp unavailable)")
+                print("PASS Main function CLI working (aiohttp unavailable)")
             else:
-                print(f"✗ Main function CLI failed: {e}")
+                print(f"FAIL Main function CLI failed: {e}")
                 return False
 
         # Test CLI main wrapper
         try:
             # This tests the click integration or fallback
-            print("✓ CLI integration available")
+            print("PASS CLI integration available")
         except Exception as e:
             print(f"CLI integration note: {e}")
 
@@ -366,10 +366,10 @@ def test_cli_integration() -> bool:
         shutil.rmtree("test_cli_output", ignore_errors=True)
 
     except Exception as e:
-        print(f"✗ CLI integration test failed: {e}")
+        print(f"FAIL CLI integration test failed: {e}")
         return False
 
-    print("✓ CLI integration tests passed!")
+    print("PASS CLI integration tests passed!")
     return True
 
 
@@ -435,7 +435,7 @@ def test_dependency_handling() -> bool:
         print("Dependency Status:")
         available_count = 0
         for dep, available in deps.items():
-            status = "✓" if available else "✗"
+            status = "PASS" if available else "FAIL"
             print(f"  {status} {dep}: {'Available' if available else 'Fallback mode'}")
             if available:
                 available_count += 1
@@ -452,13 +452,13 @@ def test_dependency_handling() -> bool:
         table.add_column("Test")
         table.add_row("Value")
 
-        print("✓ Fallback classes working correctly")
+        print("PASS Fallback classes working correctly")
 
     except Exception as e:
-        print(f"✗ Dependency handling test failed: {e}")
+        print(f"FAIL Dependency handling test failed: {e}")
         return False
 
-    print("✓ Dependency handling tests passed!")
+    print("PASS Dependency handling tests passed!")
     return True
 
 
@@ -486,7 +486,7 @@ def run_all_tests() -> bool:
             else:
                 failed += 1
         except Exception as e:
-            print(f"✗ Test {test.__name__} crashed: {e}")
+            print(f"FAIL Test {test.__name__} crashed: {e}")
             failed += 1
         print()
 
@@ -494,7 +494,7 @@ def run_all_tests() -> bool:
     print(f"Test Results: {passed} passed, {failed} failed")
 
     if failed == 0:
-        print("🎉 ALL TESTS PASSED! The CVE Research Toolkit is ready for use.")
+        print("ALL TESTS PASSED! The CVE Research Toolkit is ready for use.")
         print("\nNext Steps:")
         print(
             "1. Install optional dependencies: pip install -r requirements-research.txt"
@@ -505,7 +505,7 @@ def run_all_tests() -> bool:
         print("3. Explore advanced features with full dependencies")
         return True
     else:
-        print("❌ Some tests failed. Please review the output above.")
+        print("Some tests failed. Please review the output above.")
         return False
 
 
