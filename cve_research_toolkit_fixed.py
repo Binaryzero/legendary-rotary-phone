@@ -1360,8 +1360,8 @@ class VulnerabilityResearchEngine:
         cache_stats = self.session_cache.get_cache_stats()
         if cache_stats["cache_hits"] > 0 or cache_stats["api_calls"] > 0:
             logger.info(f"Session performance - Cache hits: {cache_stats['cache_hits']}, "
-                       f"API calls saved: {cache_stats['duplicate_cves']}, "
-                       f"Data loads: {cache_stats['api_calls']}")
+                       f"Duplicate CVEs skipped: {cache_stats['duplicate_cves']}, "
+                       f"Data source loads: {cache_stats['api_calls']}")
         
         # Handle original order for duplicate CVEs
         if duplicates_removed > 0:

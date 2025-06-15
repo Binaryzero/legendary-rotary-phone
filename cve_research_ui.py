@@ -34,8 +34,9 @@ logger = logging.getLogger(__name__)
 class CVEResearchUIHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the CVE Research UI."""
     
-    def __init__(self, *args, research_data: List[Dict[str, Any]] = None, **kwargs):
+    def __init__(self, *args, research_data: List[Dict[str, Any]] = None, server_instance=None, **kwargs):
         self.research_data = research_data or []
+        self.server_instance = server_instance
         super().__init__(*args, **kwargs)
     
     def do_GET(self):
@@ -53,6 +54,9 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
             self._serve_cve_details(cve_id)
         elif path == '/api/stats':
             self._serve_statistics()
+        elif path == '/api/export':
+            format_type = query_params.get('format', ['json'])[0]
+            self._serve_export(format_type)
         elif path.startswith('/static/'):
             self._serve_static_file(path)
         else:
@@ -81,9 +85,12 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
         sort_by = query_params.get('sort', ['cvss_score'])[0]
         sort_order = query_params.get('order', ['desc'])[0]
         
+        # Get current research data
+        current_data = self.server_instance.research_data if self.server_instance else self.research_data
+        
         # Filter data
         filtered_data = []
-        for cve in self.research_data:
+        for cve in current_data:
             # Search filter
             if search_term:
                 searchable_text = f"{cve.get('cve_id', '')} {cve.get('description', '')} {' '.join(cve.get('cwe_ids', []))}".lower()
@@ -109,7 +116,8 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
     
     def _serve_cve_details(self, cve_id: str):
         """Serve detailed information for a specific CVE."""
-        for cve in self.research_data:
+        current_data = self.server_instance.research_data if self.server_instance else self.research_data
+        for cve in current_data:
             if cve.get('cve_id') == cve_id:
                 self._send_json_response(cve)
                 return
@@ -117,17 +125,18 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
     
     def _serve_statistics(self):
         """Serve summary statistics."""
-        if not self.research_data:
+        current_data = self.server_instance.research_data if self.server_instance else self.research_data
+        if not current_data:
             self._send_json_response({})
             return
         
-        total_cves = len(self.research_data)
+        total_cves = len(current_data)
         severity_counts = {}
         cvss_scores = []
         exploit_count = 0
         kev_count = 0
         
-        for cve in self.research_data:
+        for cve in current_data:
             # Severity distribution
             severity = cve.get('severity', 'UNKNOWN').upper()
             severity_counts[severity] = severity_counts.get(severity, 0) + 1
@@ -176,18 +185,143 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
                 self._send_json_response({'error': 'No CVE IDs provided'}, 400)
                 return
             
-            # TODO: Implement async research in background
-            # For now, return a placeholder response
-            self._send_json_response({
-                'status': 'started',
-                'message': f'Research started for {len(cve_ids)} CVEs',
-                'cve_ids': cve_ids
-            })
+            # Create a temporary file with CVE IDs
+            import tempfile
+            import os
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                for cve_id in cve_ids:
+                    f.write(f"{cve_id}\n")
+                temp_file = f.name
             
+            try:
+                # Run the research
+                from cve_research_toolkit_fixed import VulnerabilityResearchEngine, ResearchReportGenerator
+                
+                config_data = {}  # Empty config like in main function
+                engine = VulnerabilityResearchEngine(config_data)
+                research_results = asyncio.run(engine.research_batch(cve_ids))
+                
+                # Convert to web UI format (same logic as _export_webui_json)
+                webui_data = []
+                for rd in research_results:
+                    webui_record = {
+                        'cve_id': rd.cve_id,
+                        'description': rd.description,
+                        'cvss_score': rd.cvss_score,
+                        'severity': rd.severity,
+                        'published_date': rd.published_date.isoformat() if rd.published_date else None,
+                        'last_modified': rd.last_modified.isoformat() if rd.last_modified else None,
+                        
+                        'weakness': {
+                            'cwe_ids': rd.weakness.cwe_ids,
+                            'capec_ids': rd.weakness.capec_ids,
+                            'attack_techniques': rd.weakness.attack_techniques,
+                            'attack_tactics': rd.weakness.attack_tactics
+                        },
+                        
+                        'threat': {
+                            'in_kev': rd.threat.in_kev,
+                            'epss_score': rd.threat.epss_score,
+                            'epss_percentile': rd.threat.epss_percentile,
+                            'actively_exploited': rd.threat.actively_exploited,
+                            'has_metasploit': rd.threat.has_metasploit,
+                            'has_nuclei': rd.threat.has_nuclei
+                        },
+                        
+                        'exploits': [
+                            {
+                                'url': exp.url,
+                                'source': exp.source,
+                                'type': exp.type
+                            } for exp in rd.exploits
+                        ],
+                        
+                        'remediation': {
+                            'patches': rd.patches,
+                            'vendor_advisories': rd.vendor_advisories,
+                            'references': rd.references
+                        }
+                    }
+                    webui_data.append(webui_record)
+                
+                # Update server's research data
+                if self.server_instance:
+                    self.server_instance.research_data.extend(webui_data)
+                    self.research_data = self.server_instance.research_data
+                else:
+                    self.research_data.extend(webui_data)
+                
+                # Clean up temp file
+                os.unlink(temp_file)
+                
+                self._send_json_response({
+                    'status': 'completed',
+                    'cve_ids': cve_ids,
+                    'message': f'Successfully researched {len(cve_ids)} CVEs',
+                    'data': webui_data
+                })
+            
+            except Exception as e:
+                logger.error(f"Research failed: {e}")
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                self._send_json_response({'error': f'Research failed: {str(e)}'}, 500)
+                
         except json.JSONDecodeError:
             self._send_json_response({'error': 'Invalid JSON'}, 400)
         except Exception as e:
             self._send_json_response({'error': str(e)}, 500)
+    
+    def _serve_export(self, format_type: str):
+        """Export research data in various formats."""
+        current_data = self.server_instance.research_data if self.server_instance else self.research_data
+        if format_type == 'json':
+            self._send_json_response(current_data)
+        elif format_type == 'csv':
+            # Generate CSV
+            if not current_data:
+                self._send_response(200, '', 'text/csv')
+                return
+                
+            import csv
+            import io
+            output = io.StringIO()
+            
+            # Define CSV columns
+            fieldnames = ['cve_id', 'description', 'cvss_score', 'severity', 'published_date', 
+                         'cwe_ids', 'capec_ids', 'attack_techniques', 'attack_tactics',
+                         'in_kev', 'epss_score', 'exploit_count', 'patch_available']
+            
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for cve in current_data:
+                row = {
+                    'cve_id': cve.get('cve_id', ''),
+                    'description': cve.get('description', ''),
+                    'cvss_score': cve.get('cvss_score', ''),
+                    'severity': cve.get('severity', ''),
+                    'published_date': cve.get('published_date', ''),
+                    'cwe_ids': ', '.join(cve.get('weakness', {}).get('cwe_ids', [])),
+                    'capec_ids': ', '.join(cve.get('weakness', {}).get('capec_ids', [])),
+                    'attack_techniques': ', '.join(cve.get('weakness', {}).get('attack_techniques', [])),
+                    'attack_tactics': ', '.join(cve.get('weakness', {}).get('attack_tactics', [])),
+                    'in_kev': 'Yes' if cve.get('threat', {}).get('in_kev') else 'No',
+                    'epss_score': cve.get('threat', {}).get('epss_score', ''),
+                    'exploit_count': len(cve.get('exploits', [])),
+                    'patch_available': 'Yes' if cve.get('remediation', {}).get('patches') else 'No'
+                }
+                writer.writerow(row)
+            
+            csv_content = output.getvalue()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/csv')
+            self.send_header('Content-Disposition', 'attachment; filename="cve_research_export.csv"')
+            self.send_header('Content-Length', str(len(csv_content)))
+            self.end_headers()
+            self.wfile.write(csv_content.encode('utf-8'))
+        else:
+            self._send_json_response({'error': f'Unsupported format: {format_type}'}, 400)
     
     def _serve_static_file(self, path: str):
         """Serve static files (placeholder for CSS/JS)."""
@@ -261,6 +395,10 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
                         <option value="desc">Descending</option>
                         <option value="asc">Ascending</option>
                     </select>
+                    <div class="export-buttons">
+                        <button onclick="exportData('json')">Export JSON</button>
+                        <button onclick="exportData('csv')">Export CSV</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -371,8 +509,24 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
         
         .controls {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
             gap: 10px;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .export-buttons button {
+            padding: 8px 12px;
+            font-size: 12px;
+            background: #f8f9fa;
+            border: 1px solid #ccc;
+        }
+        
+        .export-buttons button:hover {
+            background: #e9ecef;
         }
         
         input, select, button {
@@ -740,7 +894,9 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
                 const result = await response.json();
                 
                 if (response.ok) {
-                    alert(`Research started for ${result.cve_ids.length} CVEs. This feature is under development.`);
+                    alert(`Research completed for ${result.cve_ids.length} CVEs!`);
+                    // Refresh the page to show new data
+                    window.location.reload();
                 } else {
                     alert(`Error: ${result.error}`);
                 }
@@ -769,6 +925,16 @@ class CVEResearchUIHandler(BaseHTTPRequestHandler):
                 clearTimeout(timeout);
                 timeout = setTimeout(later, wait);
             };
+        }
+        
+        function exportData(format) {
+            const url = `/api/export?format=${format}`;
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `cve_research_export.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
         
         // Initialize
@@ -814,7 +980,7 @@ class CVEResearchUIServer:
         if data_file and data_file.exists():
             try:
                 with open(data_file, 'r') as f:
-                    if data_file.suffix.lower() == '.json':
+                    if data_file.suffix.lower() in ['.json', '.webui']:
                         self.research_data = json.load(f)
                         print(f"Loaded {len(self.research_data)} CVEs from {data_file}")
                     else:
@@ -823,7 +989,9 @@ class CVEResearchUIServer:
                 print(f"Error loading data file {data_file}: {e}")
                 self._generate_sample_data()
         else:
-            self._generate_sample_data()
+            # Start with empty data - user can research CVEs from the UI
+            self.research_data = []
+            print("Started with empty data - use the research panel to analyze CVEs")
     
     def _generate_sample_data(self):
         """Generate sample CVE data for demonstration."""
@@ -882,7 +1050,7 @@ class CVEResearchUIServer:
     def start_server(self, open_browser: bool = True):
         """Start the web server."""
         def create_handler(*args, **kwargs):
-            return CVEResearchUIHandler(*args, research_data=self.research_data, **kwargs)
+            return CVEResearchUIHandler(*args, research_data=self.research_data, server_instance=self, **kwargs)
         
         try:
             self.server = HTTPServer((self.host, self.port), create_handler)

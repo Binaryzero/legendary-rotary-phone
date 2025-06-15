@@ -40,6 +40,8 @@ Examples:
                       help='Research CVEs from file and launch UI')
     group.add_argument('--data', type=Path, metavar='JSON_FILE',
                       help='Load existing research data')
+    group.add_argument('--empty', action='store_true',
+                      help='Start with empty data (research from UI)')
     
     parser.add_argument('--host', default='localhost',
                        help='Host to bind to (default: localhost)')
@@ -56,10 +58,12 @@ Examples:
         start_with_research(args)
     elif args.data:
         start_with_data(args)
+    elif args.empty:
+        start_empty_ui(args)
 
 def start_demo_ui(args):
     """Start web UI with demo data."""
-    print("🚀 Starting CVE Research Toolkit Web UI with demo data...")
+    print("Starting CVE Research Toolkit Web UI with demo data...")
     
     from cve_research_ui import CVEResearchUIServer
     
@@ -68,8 +72,8 @@ def start_demo_ui(args):
     
     try:
         if server.start_server(open_browser=not args.no_browser):
-            print("\\n💡 Demo includes sample CVEs showcasing all Web UI features")
-            print("💡 To research real CVEs, use: python3 start_webui.py --research cves.txt")
+            print("\\nDemo includes sample CVEs showcasing all Web UI features")
+            print("To research real CVEs, use: python3 start_webui.py --research cves.txt")
             
             # Keep server running
             while True:
@@ -81,10 +85,10 @@ def start_demo_ui(args):
 def start_with_research(args):
     """Research CVEs and start web UI."""
     if not args.research.exists():
-        print(f"❌ CVE file not found: {args.research}")
+        print(f"CVE file not found: {args.research}")
         sys.exit(1)
     
-    print(f"🔍 Researching CVEs from {args.research}...")
+    print(f"Researching CVEs from {args.research}...")
     
     try:
         from cve_research_toolkit_fixed import main_research
@@ -105,14 +109,14 @@ def start_with_research(args):
         )
         
         # Find the most recent webui export
-        webui_files = list(output_dir.glob("*webui*.json"))
+        webui_files = list(output_dir.glob("*.webui"))
         if not webui_files:
-            print("❌ No web UI data file generated")
+            print("No web UI data file generated")
             sys.exit(1)
         
         latest_file = max(webui_files, key=lambda p: p.stat().st_mtime)
         
-        print(f"✅ Research complete! Starting web UI with {latest_file}...")
+        print(f"Research complete! Starting web UI with {latest_file}...")
         
         # Start web UI
         from cve_research_ui import CVEResearchUIServer
@@ -131,19 +135,19 @@ def start_with_research(args):
             server.stop_server()
             
     except ImportError:
-        print("❌ CVE Research Toolkit not available")
+        print("CVE Research Toolkit not available")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Research failed: {e}")
+        print(f"Research failed: {e}")
         sys.exit(1)
 
 def start_with_data(args):
     """Start web UI with existing data file."""
     if not args.data.exists():
-        print(f"❌ Data file not found: {args.data}")
+        print(f"Data file not found: {args.data}")
         sys.exit(1)
     
-    print(f"🌐 Starting CVE Research Toolkit Web UI with {args.data}...")
+    print(f"Starting CVE Research Toolkit Web UI with {args.data}...")
     
     from cve_research_ui import CVEResearchUIServer
     
@@ -152,6 +156,26 @@ def start_with_data(args):
     
     try:
         if server.start_server(open_browser=not args.no_browser):
+            # Keep server running
+            while True:
+                time.sleep(1)
+    except KeyboardInterrupt:
+        print("\\nShutting down...")
+        server.stop_server()
+
+def start_empty_ui(args):
+    """Start web UI with empty data for interactive research."""
+    print("Starting CVE Research Toolkit Web UI (empty - ready for research)...")
+    
+    from cve_research_ui import CVEResearchUIServer
+    
+    server = CVEResearchUIServer(args.host, args.port)
+    server.load_research_data(None)  # Starts with empty data
+    
+    try:
+        if server.start_server(open_browser=not args.no_browser):
+            print("\\nEnter CVE IDs in the research panel to start analyzing vulnerabilities")
+            print("Export your research results using the export buttons")
             # Keep server running
             while True:
                 time.sleep(1)
