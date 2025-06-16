@@ -5,375 +5,249 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+import pytest
 
 # Add the parent directory to sys.path so we can import the package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def test_core_functionality() -> bool:
+def test_core_functionality() -> None:
     """Test core functionality without external dependencies."""
     print("=== Testing Core Functionality ===")
 
-    try:
-        from cve_research_toolkit.models.data import (
-            DataLayer,
-            ExploitReference,
-            ResearchData,
-            ThreatContext,
-            WeaknessTactics,
-        )
-        from cve_research_toolkit.reporting.generator import ResearchReportGenerator
-        from cve_research_toolkit.core.engine import VulnerabilityResearchEngine
-
-        print("PASS All core classes imported successfully")
-    except ImportError as e:
-        print(f"FAIL Core import failed: {e}")
-        return False
+    from cve_research_toolkit.models.data import (
+        DataLayer,
+        ExploitReference,
+        ResearchData,
+        ThreatContext,
+        WeaknessTactics,
+    )
+    from cve_research_toolkit.reporting.generator import ResearchReportGenerator
+    from cve_research_toolkit.core.engine import VulnerabilityResearchEngine
 
     # Test data structure creation
-    try:
-        # Test ResearchData
-        rd = ResearchData(
-            cve_id="CVE-2021-44228",
-            description="Log4j vulnerability",
-            cvss_score=10.0,
-            severity="CRITICAL",
-        )
+    rd = ResearchData(
+        cve_id="CVE-2021-44228",
+        description="Log4j vulnerability",
+        cvss_score=10.0,
+        severity="CRITICAL",
+    )
 
-        # Test ExploitReference
-        exploit = ExploitReference(
-            url="https://github.com/example/poc", source="github", type="poc"
-        )
-        rd.exploits.append(exploit)
+    exploit = ExploitReference(
+        url="https://github.com/example/poc", source="github", type="poc"
+    )
+    rd.exploits.append(exploit)
 
-        # Test ThreatContext
-        rd.threat.in_kev = True
-        rd.threat.epss_score = 0.95
-
-        print("PASS Data structures created successfully")
-
-    except Exception as e:
-        print(f"FAIL Data structure creation failed: {e}")
-        return False
+    rd.threat.in_kev = True
+    rd.threat.epss_score = 0.95
 
     # Test data structure operations (cache removed)
-    try:
-        if rd.cve_id == "CVE-2021-44228":
-            print("PASS Data structure operations working correctly")
-        else:
-            print("FAIL Data structure verification failed")
-            return False
-
-    except Exception as e:
-        print(f"FAIL Data structure operations failed: {e}")
-        return False
+    assert rd.cve_id == "CVE-2021-44228"
 
     # Test report generation
-    try:
-        generator = ResearchReportGenerator()
+    generator = ResearchReportGenerator()
 
-        # Test summary table generation
-        test_data = [rd]
-        table = generator.generate_summary_table(test_data)
-        print("PASS Report generation working")
-
-    except Exception as e:
-        print(f"FAIL Report generation failed: {e}")
-        return False
+    # Test summary table generation
+    test_data = [rd]
+    table = generator.generate_summary_table(test_data)
+    assert table is not None
 
     print("PASS All core functionality tests passed!")
-    return True
 
 
-def test_export_functionality() -> bool:
+def test_export_functionality() -> None:
     """Test export functionality."""
     print("\n=== Testing Export Functionality ===")
 
+    from cve_research_toolkit.models.data import ResearchData
+    from cve_research_toolkit.reporting.generator import ResearchReportGenerator
+
+    # Create test data
+    rd1 = ResearchData(
+        cve_id="CVE-2021-44228",
+        description="Log4j RCE vulnerability",
+        cvss_score=10.0,
+        severity="CRITICAL",
+        published_date=datetime(2021, 12, 9),
+    )
+    rd1.threat.in_kev = True
+
+    rd2 = ResearchData(
+        cve_id="CVE-2023-23397",
+        description="Outlook privilege escalation",
+        cvss_score=9.8,
+        severity="CRITICAL",
+        published_date=datetime(2023, 3, 14),
+    )
+
+    test_data = [rd1, rd2]
+    generator = ResearchReportGenerator()
+
+    # Test JSON export
+    output_dir = Path("test_exports")
+    output_dir.mkdir(exist_ok=True)
+
+    generator.export_research_data(test_data, "json", output_dir / "test.json")
+
+    with open(output_dir / "test.json") as f:
+        json_data = json.load(f)
+    assert len(json_data) == 2 and json_data[0]["cve_id"] == "CVE-2021-44228"
+
+    # Test CSV export
     try:
-        from cve_research_toolkit.models.data import ResearchData
-        from cve_research_toolkit.reporting.generator import ResearchReportGenerator
+        generator.export_research_data(test_data, "csv", output_dir / "test.csv")
+    except RuntimeError as e:
+        # CSV export requires pandas; ensure appropriate error when missing
+        if "pandas" in str(e).lower():
+            pytest.skip("pandas not available for CSV export")
+        else:
+            raise
+    else:
+        csv_file = output_dir / "test.csv"
+        assert csv_file.exists() and csv_file.stat().st_size > 0
 
-        # Create test data
-        rd1 = ResearchData(
-            cve_id="CVE-2021-44228",
-            description="Log4j RCE vulnerability",
-            cvss_score=10.0,
-            severity="CRITICAL",
-            published_date=datetime(2021, 12, 9),
-        )
-        rd1.threat.in_kev = True
+    # Test Markdown export
+    generator.export_research_data(
+        test_data,
+        "markdown",
+        output_dir / "test.md",
+    )
 
-        rd2 = ResearchData(
-            cve_id="CVE-2023-23397",
-            description="Outlook privilege escalation",
-            cvss_score=9.8,
-            severity="CRITICAL",
-            published_date=datetime(2023, 3, 14),
-        )
+    md_file = output_dir / "test.md"
+    assert md_file.exists()
+    content = md_file.read_text()
+    assert "CVE-2021-44228" in content and "Critical Severity: 2" in content
 
-        test_data = [rd1, rd2]
-        generator = ResearchReportGenerator()
+    # Test Excel export (will use fallback if openpyxl not available)
+    generator.export_research_data(test_data, "excel", output_dir / "test.xlsx")
 
-        # Test JSON export
-        output_dir = Path("test_exports")
-        output_dir.mkdir(exist_ok=True)
+    # Cleanup
+    import shutil
 
-        try:
-            generator.export_research_data(test_data, "json", output_dir / "test.json")
-
-            # Verify JSON content
-            with open(output_dir / "test.json") as f:
-                json_data = json.load(f)
-                if len(json_data) == 2 and json_data[0]["cve_id"] == "CVE-2021-44228":
-                    print("PASS JSON export working correctly")
-                else:
-                    print("FAIL JSON export content incorrect")
-                    return False
-        except Exception as e:
-            print(f"FAIL JSON export failed: {e}")
-            return False
-
-        # Test CSV export
-        try:
-            generator.export_research_data(test_data, "csv", output_dir / "test.csv")
-
-            # Verify CSV was created
-            csv_file = output_dir / "test.csv"
-            if csv_file.exists() and csv_file.stat().st_size > 0:
-                print("PASS CSV export working correctly")
-            else:
-                print("FAIL CSV export failed")
-                return False
-        except Exception as e:
-            print(f"FAIL CSV export failed: {e}")
-            return False
-
-        # Test Markdown export
-        try:
-            generator.export_research_data(
-                test_data, "markdown", output_dir / "test.md"
-            )
-
-            # Verify Markdown content
-            md_file = output_dir / "test.md"
-            if md_file.exists():
-                content = md_file.read_text()
-                if "CVE-2021-44228" in content and "Critical Severity: 2" in content:
-                    print("PASS Markdown export working correctly")
-                else:
-                    print("FAIL Markdown export content incorrect")
-                    return False
-            else:
-                print("FAIL Markdown export failed")
-                return False
-        except Exception as e:
-            print(f"FAIL Markdown export failed: {e}")
-            return False
-
-        # Test Excel export (will use fallback if openpyxl not available)
-        try:
-            generator.export_research_data(test_data, "excel", output_dir / "test.xlsx")
-            print("PASS Excel export completed (with or without openpyxl)")
-        except Exception as e:
-            print(f"FAIL Excel export failed: {e}")
-            return False
-
-        # Cleanup
-        import shutil
-
-        shutil.rmtree(output_dir, ignore_errors=True)
-
-    except Exception as e:
-        print(f"FAIL Export functionality test failed: {e}")
-        return False
+    shutil.rmtree(output_dir, ignore_errors=True)
 
     print("PASS All export functionality tests passed!")
-    return True
 
 
-def test_connectors() -> bool:
+def test_connectors() -> None:
     """Test data source connectors."""
     print("\n=== Testing Data Source Connectors ===")
 
-    try:
-        from cve_research_toolkit.connectors.cve_project import CVEProjectConnector
-        from cve_research_toolkit.connectors.mitre import MITREConnector
-        from cve_research_toolkit.connectors.threat_context import ThreatContextConnector
-        from cve_research_toolkit.connectors.trickest import TrickestConnector
+    from cve_research_toolkit.connectors.cve_project import CVEProjectConnector
+    from cve_research_toolkit.connectors.mitre import MITREConnector
+    from cve_research_toolkit.connectors.threat_context import ThreatContextConnector
+    from cve_research_toolkit.connectors.trickest import TrickestConnector
 
-        # Test connector instantiation
-        cve_connector = CVEProjectConnector()
-        trickest_connector = TrickestConnector()
-        mitre_connector = MITREConnector()
-        threat_connector = ThreatContextConnector()
+    cve_connector = CVEProjectConnector()
+    trickest_connector = TrickestConnector()
+    mitre_connector = MITREConnector()
+    threat_connector = ThreatContextConnector()
 
-        print("PASS All connectors instantiated successfully")
-
-        # Test parsing with sample data
-        sample_cve_data = {
-            "containers": {
-                "cna": {
-                    "descriptions": [{"value": "Test vulnerability description"}],
-                    "metrics": [
-                        {
-                            "cvssV3_1": {
-                                "baseScore": 7.5,
-                                "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
-                            }
+    # Test parsing with sample data
+    sample_cve_data = {
+        "containers": {
+            "cna": {
+                "descriptions": [{"value": "Test vulnerability description"}],
+                "metrics": [
+                    {
+                        "cvssV3_1": {
+                            "baseScore": 7.5,
+                            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
                         }
-                    ],
-                    "references": [{"url": "https://example.com/advisory"}],
-                }
-            },
-            "cveMetadata": {"datePublished": "2023-01-01", "dateUpdated": "2023-01-02"},
-        }
+                    }
+                ],
+                "references": [{"url": "https://example.com/advisory"}],
+            }
+        },
+        "cveMetadata": {"datePublished": "2023-01-01", "dateUpdated": "2023-01-02"},
+    }
 
-        parsed = cve_connector.parse("CVE-2023-0001", sample_cve_data)
-        if parsed.get("description") == "Test vulnerability description":
-            print("PASS CVE connector parsing working")
-        else:
-            print("FAIL CVE connector parsing failed")
-            return False
+    parsed = cve_connector.parse("CVE-2023-0001", sample_cve_data)
+    assert parsed.get("description") == "Test vulnerability description"
 
-        # Test Trickest parsing
-        trickest_data = {
-            "content": "# CVE-2023-0001\n[PoC](https://github.com/example/poc)\n[Exploit-DB](https://exploit-db.com/exploits/12345)"
-        }
+    trickest_data = {
+        "content": "# CVE-2023-0001\n[PoC](https://github.com/example/poc)\n[Exploit-DB](https://exploit-db.com/exploits/12345)"
+    }
 
-        parsed = trickest_connector.parse("CVE-2023-0001", trickest_data)
-        if len(parsed.get("exploits", [])) == 2:
-            print("PASS Trickest connector parsing working")
-        else:
-            print("FAIL Trickest connector parsing failed")
-            return False
+    parsed = trickest_connector.parse("CVE-2023-0001", trickest_data)
+    assert len(parsed.get("exploits", [])) == 2
 
-        # Test MITRE connector (returns placeholder data)
-        parsed = mitre_connector.parse("CVE-2023-0001", {})
-        if "cwe_ids" in parsed:
-            print("PASS MITRE connector working")
-        else:
-            print("FAIL MITRE connector failed")
-            return False
+    parsed = mitre_connector.parse("CVE-2023-0001", {})
+    assert "cwe_ids" in parsed
 
-        # Test threat context connector
-        threat_data = {"in_kev": True, "epss": {"score": 0.85, "percentile": 95.0}}
+    threat_data = {"in_kev": True, "epss": {"score": 0.85, "percentile": 95.0}}
 
-        parsed = threat_connector.parse("CVE-2023-0001", threat_data)
-        if parsed.get("threat", {}).get("in_kev") is True:
-            print("PASS Threat context connector working")
-        else:
-            print("FAIL Threat context connector failed")
-            return False
-
-    except Exception as e:
-        print(f"FAIL Connector testing failed: {e}")
-        return False
+    parsed = threat_connector.parse("CVE-2023-0001", threat_data)
+    assert parsed.get("threat", {}).get("in_kev") is True
 
     print("PASS All connector tests passed!")
-    return True
 
 
-def test_data_validation() -> bool:
+def test_data_validation() -> None:
     """Test data validation and consistency."""
     print("\n=== Testing Data Validation ===")
 
-    try:
-        from cve_research_toolkit.models.data import ResearchData, ExploitReference
+    from cve_research_toolkit.models.data import ResearchData, ExploitReference
 
-        # Test data validation
-        test_data = ResearchData(cve_id="CVE-2021-44228", cvss_score=10.0)
-        test_data.cvss_vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
-        test_data.description = "Test vulnerability for validation"
-        
-        # Add exploit reference
-        exploit = ExploitReference(
-            url="https://github.com/example/poc",
-            source="github",
-            type="poc"
-        )
-        test_data.exploits.append(exploit)
-        
-        # Validate basic properties
-        if test_data.cve_id and test_data.cvss_score > 0:
-            print("PASS Basic data validation working")
-        else:
-            print("FAIL Basic data validation failed")
-            return False
-        
-        # Validate exploit data
-        if len(test_data.exploits) == 1 and test_data.exploits[0].url:
-            print("PASS Exploit data validation working")
-        else:
-            print("FAIL Exploit data validation failed")
-            return False
-        
-        # Validate threat context
-        test_data.threat.in_kev = True
-        test_data.threat.epss_score = 0.95
-        
-        if test_data.threat.in_kev and test_data.threat.epss_score > 0.9:
-            print("PASS Threat context validation working")
-        else:
-            print("FAIL Threat context validation failed")
-            return False
+    test_data = ResearchData(cve_id="CVE-2021-44228", cvss_score=10.0)
+    test_data.cvss_vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+    test_data.description = "Test vulnerability for validation"
 
-    except Exception as e:
-        print(f"FAIL Data validation test failed: {e}")
-        return False
+    exploit = ExploitReference(
+        url="https://github.com/example/poc",
+        source="github",
+        type="poc"
+    )
+    test_data.exploits.append(exploit)
+
+    assert test_data.cve_id and test_data.cvss_score > 0
+    assert len(test_data.exploits) == 1 and test_data.exploits[0].url
+
+    test_data.threat.in_kev = True
+    test_data.threat.epss_score = 0.95
+    assert test_data.threat.in_kev and test_data.threat.epss_score > 0.9
 
     print("PASS Data validation tests passed!")
-    return True
 
 
-def test_cli_integration() -> bool:
+def test_cli_integration() -> None:
     """Test CLI integration."""
     print("\n=== Testing CLI Integration ===")
 
+    from cve_research_toolkit.cli import cli_main, main_research as main
+
+    # Create test input
+    test_file = Path("test_cli_input.txt")
+    test_file.write_text("CVE-2021-44228\nCVE-2023-23397")
+
+    # Test main function directly
     try:
-        from cve_research_toolkit.cli import cli_main, main_research as main
-
-        # Create test input
-        test_file = Path("test_cli_input.txt")
-        test_file.write_text("CVE-2021-44228\nCVE-2023-23397")
-
-        # Test main function directly
-        try:
-            main(
-                input_file=str(test_file),
-                format=["json"],
-                output_dir="test_cli_output",
-            )
-            print("PASS Main function CLI working")
-        except Exception as e:
-            # Expected if aiohttp is not available
-            if "aiohttp" in str(e).lower():
-                print("PASS Main function CLI working (aiohttp unavailable)")
-            else:
-                print(f"FAIL Main function CLI failed: {e}")
-                return False
-
-        # Test CLI main wrapper
-        try:
-            # This tests the click integration or fallback
-            print("PASS CLI integration available")
-        except Exception as e:
-            print(f"CLI integration note: {e}")
-
-        # Cleanup
-        test_file.unlink(missing_ok=True)
-        import shutil
-
-        shutil.rmtree("test_cli_output", ignore_errors=True)
-
+        main(
+            input_file=str(test_file),
+            format=["json"],
+            output_dir="test_cli_output",
+        )
     except Exception as e:
-        print(f"FAIL CLI integration test failed: {e}")
-        return False
+        if "aiohttp" not in str(e).lower():
+            raise
+
+    # Test CLI main wrapper
+    try:
+        # This tests the click integration or fallback
+        pass
+    except Exception as e:
+        print(f"CLI integration note: {e}")
+
+    # Cleanup
+    test_file.unlink(missing_ok=True)
+    import shutil
+
+    shutil.rmtree("test_cli_output", ignore_errors=True)
 
     print("PASS CLI integration tests passed!")
-    return True
 
 
-def test_dependency_handling() -> bool:
+def test_dependency_handling() -> None:
     """Test dependency handling and fallbacks."""
     print("\n=== Testing Dependency Handling ===")
 
@@ -456,10 +330,9 @@ def test_dependency_handling() -> bool:
 
     except Exception as e:
         print(f"FAIL Dependency handling test failed: {e}")
-        return False
+        raise
 
     print("PASS Dependency handling tests passed!")
-    return True
 
 
 def run_all_tests() -> bool:
@@ -481,10 +354,8 @@ def run_all_tests() -> bool:
 
     for test in tests:
         try:
-            if test():
-                passed += 1
-            else:
-                failed += 1
+            test()
+            passed += 1
         except Exception as e:
             print(f"FAIL Test {test.__name__} crashed: {e}")
             failed += 1
