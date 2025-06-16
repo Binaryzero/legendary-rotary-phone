@@ -1,10 +1,10 @@
-"""Custom exceptions for CVE Research Toolkit."""
+"""Custom exceptions for ODIN."""
 
 from typing import Optional
 
 
 class CVEResearchError(Exception):
-    """Base exception for CVE Research Toolkit."""
+    """Base exception for ODIN."""
     
     def __init__(self, message: str, cve_id: Optional[str] = None, source: Optional[str] = None) -> None:
         self.message = message

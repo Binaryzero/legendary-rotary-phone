@@ -1,4 +1,4 @@
-"""Main entry point for CVE Research Toolkit when run as module."""
+"""Main entry point for ODIN when run as module."""
 
 from .cli import cli_main
 

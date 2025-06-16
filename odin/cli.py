@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line interface for CVE Research Toolkit.
+"""Command-line interface for ODIN.
 
 Provides click-based CLI for multi-source vulnerability intelligence research.
 """
@@ -87,7 +87,7 @@ def cli_main() -> None:
     @click.option('--detailed', is_flag=True,
                   help='Generate detailed reports for each CVE')
     def click_main(input_file: str, format: Tuple[str, ...], output_dir: str, config: str, detailed: bool) -> None:
-        """CVE Research Toolkit - Multi-Source Intelligence Platform"""
+        """ODIN (OSINT Data Intelligence Nexus) - Multi-Source Intelligence Platform"""
         main_research(input_file, list(format), output_dir, config, detailed)
     
     click_main()
@@ -95,7 +95,7 @@ def cli_main() -> None:
 
 def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown'], output_dir: str = 'research_output', 
                  config: str = DEFAULT_CONFIG, detailed: bool = False) -> None:
-    """CVE Research Toolkit - Multi-Source Intelligence Platform
+    """ODIN (OSINT Data Intelligence Nexus) - Multi-Source Intelligence Platform
     
     Integrates data from:
     - CVEProject/cvelistV5 (Foundational)
@@ -105,7 +105,7 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
     """
     # Display banner
     console.print(Panel.fit(
-        "[bold blue]CVE Research Toolkit[/bold blue]\n"
+        "[bold blue]ODIN (OSINT Data Intelligence Nexus)[/bold blue]\n"
         "[dim]Multi-Source Vulnerability Intelligence Platform[/dim]",
         border_style="blue"
     ))

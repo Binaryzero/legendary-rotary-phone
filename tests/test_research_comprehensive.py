@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comprehensive test suite for CVE Research Toolkit"""
+"""Comprehensive test suite for ODIN"""
 
 import json
 import sys
@@ -15,15 +15,15 @@ def test_core_functionality() -> None:
     """Test core functionality without external dependencies."""
     print("=== Testing Core Functionality ===")
 
-    from cve_research_toolkit.models.data import (
+    from odin.models.data import (
         DataLayer,
         ExploitReference,
         ResearchData,
         ThreatContext,
         WeaknessTactics,
     )
-    from cve_research_toolkit.reporting.generator import ResearchReportGenerator
-    from cve_research_toolkit.core.engine import VulnerabilityResearchEngine
+    from odin.reporting.generator import ResearchReportGenerator
+    from odin.core.engine import VulnerabilityResearchEngine
 
     # Test data structure creation
     rd = ResearchData(
@@ -59,8 +59,8 @@ def test_export_functionality() -> None:
     """Test export functionality."""
     print("\n=== Testing Export Functionality ===")
 
-    from cve_research_toolkit.models.data import ResearchData
-    from cve_research_toolkit.reporting.generator import ResearchReportGenerator
+    from odin.models.data import ResearchData
+    from odin.reporting.generator import ResearchReportGenerator
 
     # Create test data
     rd1 = ResearchData(
@@ -133,10 +133,10 @@ def test_connectors() -> None:
     """Test data source connectors."""
     print("\n=== Testing Data Source Connectors ===")
 
-    from cve_research_toolkit.connectors.cve_project import CVEProjectConnector
-    from cve_research_toolkit.connectors.mitre import MITREConnector
-    from cve_research_toolkit.connectors.threat_context import ThreatContextConnector
-    from cve_research_toolkit.connectors.trickest import TrickestConnector
+    from odin.connectors.cve_project import CVEProjectConnector
+    from odin.connectors.mitre import MITREConnector
+    from odin.connectors.threat_context import ThreatContextConnector
+    from odin.connectors.trickest import TrickestConnector
 
     cve_connector = CVEProjectConnector()
     trickest_connector = TrickestConnector()
@@ -187,7 +187,7 @@ def test_data_validation() -> None:
     """Test data validation and consistency."""
     print("\n=== Testing Data Validation ===")
 
-    from cve_research_toolkit.models.data import ResearchData, ExploitReference
+    from odin.models.data import ResearchData, ExploitReference
 
     test_data = ResearchData(cve_id="CVE-2021-44228", cvss_score=10.0)
     test_data.cvss_vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
@@ -214,7 +214,7 @@ def test_cli_integration() -> None:
     """Test CLI integration."""
     print("\n=== Testing CLI Integration ===")
 
-    from cve_research_toolkit.cli import cli_main, main_research as main
+    from odin.cli import cli_main, main_research as main
 
     # Create test input
     test_file = Path("test_cli_input.txt")
@@ -253,7 +253,7 @@ def test_dependency_handling() -> None:
 
     try:
         # Test console utilities
-        from cve_research_toolkit.utils.console import create_console
+        from odin.utils.console import create_console
         
         # Test optional dependencies availability
         try:
@@ -337,7 +337,7 @@ def test_dependency_handling() -> None:
 
 def run_all_tests() -> bool:
     """Run the complete test suite."""
-    print("CVE Research Toolkit - Comprehensive Test Suite")
+    print("ODIN (OSINT Data Intelligence Nexus) - Comprehensive Test Suite")
     print("=" * 70)
 
     tests = [
@@ -365,7 +365,7 @@ def run_all_tests() -> bool:
     print(f"Test Results: {passed} passed, {failed} failed")
 
     if failed == 0:
-        print("ALL TESTS PASSED! The CVE Research Toolkit is ready for use.")
+        print("ALL TESTS PASSED! ODIN is ready for use.")
         print("\nNext Steps:")
         print(
             "1. Install optional dependencies: pip install -r requirements-research.txt"

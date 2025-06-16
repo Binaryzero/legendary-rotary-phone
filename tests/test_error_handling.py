@@ -42,9 +42,9 @@ except ImportError:
             
             return RaisesContext(*args, **kwargs)
 
-from cve_research_toolkit import exceptions
-from cve_research_toolkit.utils.retry import async_retry, RetryConfig, CircuitBreaker
-from cve_research_toolkit.connectors.cve_project import CVEProjectConnector
+from odin import exceptions
+from odin.utils.retry import async_retry, RetryConfig, CircuitBreaker
+from odin.connectors.cve_project import CVEProjectConnector
 
 
 class TestExceptions:

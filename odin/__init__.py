@@ -1,4 +1,4 @@
-"""CVE Research Toolkit - Multi-Source Vulnerability Intelligence Platform
+"""ODIN (OSINT Data Intelligence Nexus) - Multi-Source Vulnerability Intelligence Platform
 
 Integrates multiple FOSS vulnerability data sources to provide comprehensive
 research intelligence across five layers:

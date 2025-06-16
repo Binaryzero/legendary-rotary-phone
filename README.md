@@ -1,4 +1,4 @@
-# CVE Research Toolkit
+# ODIN (OSINT Data Intelligence Nexus)
 
 This repository provides a collection of utilities for performing vulnerability research across multiple open source intelligence feeds. The toolkit aggregates information from several data layers and exposes a backend API together with a React based user interface.
 

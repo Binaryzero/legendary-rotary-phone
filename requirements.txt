@@ -1,4 +1,4 @@
-# CVE Research Toolkit Dependencies
+# ODIN (OSINT Data Intelligence Nexus) Dependencies
 
 # Core dependencies
 requests>=2.32.0

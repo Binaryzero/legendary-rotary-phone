@@ -34,7 +34,12 @@
       "Bash(rm:*)",
       "Bash(npm install)",
       "Bash(npm audit:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(sed:*)",
+      "Bash(diff:*)",
+      "Bash(timeout 5 python -m backend.app)",
+      "Bash(chmod:*)",
+      "Bash(timeout 10 python:*)"
     ],
     "deny": []
   }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Start script for the new React + FastAPI CVE Research Toolkit
+Start script for the new React + FastAPI ODIN
 """
 
 import subprocess
@@ -71,7 +71,7 @@ def start_frontend(port=3000):
 
 def main():
     """Main function to start both backend and frontend."""
-    print("CVE Research Toolkit - New React + FastAPI Stack")
+    print("ODIN (OSINT Data Intelligence Nexus) - React + FastAPI Stack")
     print("=" * 60)
     
     # Parse command line arguments

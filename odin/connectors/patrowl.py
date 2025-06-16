@@ -20,7 +20,7 @@ class PatrowlConnector(DataSourceConnector):
     
     def __init__(self) -> None:
         self.headers = {
-            'User-Agent': 'CVE-Research-Toolkit/1.0 (Security Research Tool)',
+            'User-Agent': 'ODIN/1.0 (Security Research Tool)',
             'Accept': 'application/json, text/plain'
         }
     
