@@ -2,6 +2,12 @@
 
 This repository provides a collection of utilities for performing vulnerability research across multiple open source intelligence feeds. The toolkit aggregates information from several data layers and exposes a backend API together with a React based user interface.
 
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+- Python 3.x
+- Node.js and npm
+
 ## Components
 
 ### Backend
