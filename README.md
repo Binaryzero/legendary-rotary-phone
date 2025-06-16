@@ -26,7 +26,7 @@ The helper script `start_odin_ui.py` installs requirements and launches both the
 
 ```bash
 # install Python and Node dependencies
-python start_ui.py --install
+python start_odin_ui.py --install
 
 # start the API on port 8000 and the frontend on port 3000
 python start_odin_ui.py
