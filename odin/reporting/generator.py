@@ -261,15 +261,30 @@ class ResearchReportGenerator:
         return "\n".join(report)
     
     def export_research_data(self, research_data: List[ResearchData], format: str, output_path: Path) -> None:
-        """Export research data to various formats."""
-        if format == "json":
+        """Export research data in specified format.
+        
+        Supported formats:
+        - json: Comprehensive data export for programmatic use and web UI
+        - csv: Tabular format for spreadsheet analysis  
+        - excel: Excel format with all fields (same structure as CSV)
+        - webui: JSON format optimized for web UI visualization
+        - markdown: Detailed markdown reports
+        
+        Note: Use --detailed flag for interactive Web UI visualization
+        """
+        if format == "json" or format == "webui":
+            # JSON and WebUI use the same comprehensive format
             self._export_json(research_data, output_path)
+            if format == "webui":
+                console.print(f"[cyan]Start the web UI with: python3 cve_research_ui.py --data-file {output_path}[/cyan]")
         elif format == "csv":
             self._export_csv(research_data, output_path)
-        elif format == "markdown":
-            self._export_markdown(research_data, output_path)
         elif format == "excel":
             self._export_excel(research_data, output_path)
+        elif format == "markdown":
+            self._export_markdown(research_data, output_path)
+        else:
+            raise ValueError(f"Unsupported export format: {format}. Supported: json, csv, excel, webui, markdown")
     
     def _export_json(self, data: List[ResearchData], path: Path) -> None:
         """Export to JSON format."""
@@ -281,16 +296,33 @@ class ResearchReportGenerator:
         console.print(f"[green]✓[/green] Research data exported to {path}")
     
     def _research_data_to_dict(self, rd: ResearchData) -> Dict[str, Any]:
-        """Convert ResearchData to dictionary for JSON export."""
+        """Convert ResearchData to comprehensive dictionary for JSON export."""
+        # Get the standardized row data for consistency
+        row_data = self._generate_export_row(rd)
+        
+        # Also include structured data for programmatic access
         return {
+            # Core identification
             "cve_id": rd.cve_id,
             "description": rd.description,
+            
+            # CVSS information
             "cvss_score": rd.cvss_score,
             "cvss_vector": rd.cvss_vector,
             "severity": rd.severity,
+            
+            # Dates
             "published_date": rd.published_date.isoformat() if rd.published_date else None,
             "last_modified": rd.last_modified.isoformat() if rd.last_modified else None,
+            "last_enriched": rd.last_enriched.isoformat() if rd.last_enriched else None,
+            
+            # References and remediation
             "references": rd.references,
+            "vendor_advisories": rd.vendor_advisories,
+            "patches": rd.patches,
+            "cpe_affected": rd.cpe_affected,
+            
+            # Exploits
             "exploits": [
                 {
                     "url": e.url,
@@ -300,105 +332,171 @@ class ResearchReportGenerator:
                 } for e in rd.exploits
             ],
             "exploit_maturity": rd.exploit_maturity,
+            
+            # MITRE Framework
             "weakness": {
                 "cwe_ids": rd.weakness.cwe_ids,
+                "cwe_details": rd.weakness.cwe_details,
                 "capec_ids": rd.weakness.capec_ids,
+                "capec_details": rd.weakness.capec_details,
                 "attack_techniques": rd.weakness.attack_techniques,
-                "attack_tactics": rd.weakness.attack_tactics
+                "attack_tactics": rd.weakness.attack_tactics,
+                "kill_chain_phases": rd.weakness.kill_chain_phases
             },
+            
+            # Threat intelligence
             "threat": {
                 "in_kev": rd.threat.in_kev,
+                "vulncheck_kev": rd.threat.vulncheck_kev,
                 "epss_score": rd.threat.epss_score,
                 "epss_percentile": rd.threat.epss_percentile,
+                "vedas_score": rd.threat.vedas_score,
                 "has_metasploit": rd.threat.has_metasploit,
                 "has_nuclei": rd.threat.has_nuclei,
+                "has_exploitdb": rd.threat.has_exploitdb,
+                "has_poc_github": rd.threat.has_poc_github,
                 "actively_exploited": rd.threat.actively_exploited,
                 "ransomware_campaign": rd.threat.ransomware_campaign,
-                "vedas_score": rd.threat.vedas_score
+                "kev_vulnerability_name": rd.threat.kev_vulnerability_name,
+                "kev_short_description": rd.threat.kev_short_description,
+                "kev_vendor_project": rd.threat.kev_vendor_project,
+                "kev_product": rd.threat.kev_product
             },
-            "cpe_affected": rd.cpe_affected,
-            "vendor_advisories": rd.vendor_advisories,
-            "patches": rd.patches,
-            "last_enriched": rd.last_enriched.isoformat() if rd.last_enriched else None
+            
+            # Include all CSV/Excel fields for consistency
+            "csv_row_data": row_data
+        }
+    
+    def _sanitize_csv_text(self, text: str) -> str:
+        """Sanitize text for CSV export by removing problematic characters that break row structure."""
+        if not text:
+            return ""
+        
+        import re
+        
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Remove ALL newlines, carriage returns, and tabs that break CSV structure
+        text = re.sub(r'[\n\r\t]+', ' ', text)
+        
+        # Replace multiple whitespace with single space
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Escape double quotes for CSV compliance (replace " with "")
+        text = text.replace('"', '""')
+        
+        # Remove control characters and non-printable characters  
+        text = ''.join(char for char in text if char.isprintable())
+        
+        # Remove specific characters that commonly break CSV structure
+        text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', text)  # Remove control characters
+        
+        # Trim whitespace
+        text = text.strip()
+        
+        return text
+
+    def _generate_export_row(self, rd: ResearchData) -> Dict[str, Any]:
+        """
+        Generates a standardized dictionary representing a single CVE's data for CSV or Excel export.
+        
+        The export row includes core CVE details, CVSS metrics, threat intelligence, exploit information, enhanced vulnerability classification, NIST 800-53 control mappings, and detailed product intelligence. Fields are formatted and sanitized for compatibility with tabular data exports.
+        
+        Args:
+            rd: The ResearchData object containing aggregated vulnerability intelligence.
+        
+        Returns:
+            A dictionary mapping column names to values for export.
+        """
+        # Extract fix/upgrade references
+        fix_versions = []
+        mitigations = []
+        for ref in rd.references:
+            # Simple heuristic for upgrade/fix URLs
+            if any(word in ref.lower() for word in ['upgrade', 'update', 'patch', 'fix', 'release']):
+                fix_versions.append(ref)
+            elif any(word in ref.lower() for word in ['advisory', 'bulletin', 'security', 'mitigat']):
+                mitigations.append(ref)
+        
+        # Format affected products (vendor, product, version)
+        affected_str = ""
+        if rd.cpe_affected:
+            # Parse CPE strings to extract vendor/product/version
+            affected_parts = []
+            for cpe in rd.cpe_affected[:10]:  # Limit to 10 for readability
+                parts = cpe.split(':')
+                if len(parts) >= 5:
+                    vendor = parts[3]
+                    product = parts[4]
+                    version = parts[5] if len(parts) > 5 else '*'
+                    affected_parts.append(f"{vendor} {product} {version}")
+            affected_str = "; ".join(affected_parts)
+        
+        # Filter ExploitRefs to only include actual exploit URLs (not NVD references)
+        exploit_urls = []
+        for exploit in rd.exploits:
+            if exploit.url and not any(domain in exploit.url.lower() for domain in ['cve.mitre.org', 'nvd.nist.gov']):
+                exploit_urls.append(exploit.url)
+        
+        return {
+            # Core CVE fields
+            'CVE ID': rd.cve_id,
+            'Description': self._sanitize_csv_text(rd.description),
+            'CVSS': rd.cvss_score,
+            'Severity': rd.severity,
+            'Vector': rd.cvss_vector,
+            'CWE': self._sanitize_csv_text('; '.join(rd.weakness.cwe_details) if rd.weakness.cwe_details else '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else ''),
+            'Exploit': 'Yes' if exploit_urls else 'No',
+            'ExploitRefs': self._sanitize_csv_text('; '.join(exploit_urls)),
+            'FixVersion': self._sanitize_csv_text(fix_versions[0] if fix_versions else ''),
+            'Mitigations': self._sanitize_csv_text('; '.join(mitigations[:3]) if mitigations else ''),
+            'Affected': self._sanitize_csv_text(affected_str),
+            'References': self._sanitize_csv_text(', '.join(rd.references)),
+            
+            # CVSS Metric Breakdown
+            'Attack Vector': self._extract_cvss_component(rd.cvss_vector, 'AV', {'N': 'Network', 'A': 'Adjacent', 'L': 'Local', 'P': 'Physical'}),
+            'Attack Complexity': self._extract_cvss_component(rd.cvss_vector, 'AC', {'L': 'Low', 'H': 'High'}),
+            'Privileges Required': self._extract_cvss_component(rd.cvss_vector, 'PR', {'N': 'None', 'L': 'Low', 'H': 'High'}),
+            'User Interaction': self._extract_cvss_component(rd.cvss_vector, 'UI', {'N': 'None', 'R': 'Required'}),
+            'Scope': self._extract_cvss_component(rd.cvss_vector, 'S', {'U': 'Unchanged', 'C': 'Changed'}),
+            'Confidentiality Impact': self._extract_cvss_component(rd.cvss_vector, 'C', {'N': 'None', 'L': 'Low', 'H': 'High'}),
+            'Integrity Impact': self._extract_cvss_component(rd.cvss_vector, 'I', {'N': 'None', 'L': 'Low', 'H': 'High'}),
+            'Availability Impact': self._extract_cvss_component(rd.cvss_vector, 'A', {'N': 'None', 'L': 'Low', 'H': 'High'}),
+            
+            # Threat intelligence fields
+            'Exploit Count': len(exploit_urls),
+            'Exploit Maturity': rd.exploit_maturity,
+            'Exploit Types': '; '.join([e.type for e in rd.exploits]) if rd.exploits else '',
+            'CISA KEV': 'Yes' if rd.threat.in_kev else 'No',
+            'EPSS Score': rd.threat.epss_score if rd.threat.epss_score else '',
+            'EPSS Percentile': rd.threat.epss_percentile if rd.threat.epss_percentile else '',
+            'Actively Exploited': 'Yes' if rd.threat.actively_exploited else 'No',
+            'Has Metasploit': 'Yes' if rd.threat.has_metasploit else 'No',
+            'Has Nuclei': 'Yes' if rd.threat.has_nuclei else 'No',
+            'CAPEC IDs': '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
+            'Attack Techniques': '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
+            'Attack Tactics': '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
+            'Reference Count': len(rd.references),
+            'CPE Affected Count': len(rd.cpe_affected),
+            'Vendor Advisories': '; '.join(rd.vendor_advisories) if rd.vendor_advisories else '',
+            'Patches': '; '.join(rd.patches) if rd.patches else ''
         }
     
     def _export_csv(self, data: List[ResearchData], path: Path) -> None:
-        """Export to CSV format with clean, relevant fields only."""
+        """
+        Exports research data to a CSV file with standardized fields.
+        
+        Args:
+            data: List of ResearchData objects to export.
+            path: Destination file path for the CSV output.
+        
+        Raises:
+            RuntimeError: If pandas is not available.
+        """
         rows = []
         for rd in data:
-            # Extract fix/upgrade references
-            fix_versions = []
-            mitigations = []
-            for ref in rd.references:
-                # Simple heuristic for upgrade/fix URLs
-                if any(word in ref.lower() for word in ['upgrade', 'update', 'patch', 'fix', 'release']):
-                    fix_versions.append(ref)
-                elif any(word in ref.lower() for word in ['advisory', 'bulletin', 'security', 'mitigat']):
-                    mitigations.append(ref)
-            
-            # Format affected products (vendor, product, version)
-            affected_str = ""
-            if rd.cpe_affected:
-                # Parse CPE strings to extract vendor/product/version
-                affected_parts = []
-                for cpe in rd.cpe_affected[:10]:  # Limit to 10 for readability
-                    parts = cpe.split(':')
-                    if len(parts) >= 5:
-                        vendor = parts[3]
-                        product = parts[4]
-                        version = parts[5] if len(parts) > 5 else '*'
-                        affected_parts.append(f"{vendor} {product} {version}")
-                affected_str = "; ".join(affected_parts)
-            
-            # Filter ExploitRefs to only include actual exploit URLs (not NVD references)
-            exploit_urls = []
-            for exploit in rd.exploits:
-                if exploit.url and not any(domain in exploit.url.lower() for domain in ['cve.mitre.org', 'nvd.nist.gov']):
-                    exploit_urls.append(exploit.url)
-            
-            rows.append({
-                # Core CVE fields
-                'CVE ID': rd.cve_id,
-                'Description': rd.description,
-                'CVSS': rd.cvss_score,
-                'Severity': rd.severity,
-                'Vector': rd.cvss_vector,
-                'CWE': '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else '',
-                'Exploit': 'Yes' if exploit_urls else 'No',
-                'ExploitRefs': '; '.join(exploit_urls),
-                'FixVersion': fix_versions[0] if fix_versions else '',
-                'Mitigations': '; '.join(mitigations[:3]) if mitigations else '',
-                'Affected': affected_str,
-                'References': ', '.join(rd.references),
-                
-                # CVSS Metric Breakdown
-                'Attack Vector': self._extract_cvss_component(rd.cvss_vector, 'AV', {'N': 'Network', 'A': 'Adjacent', 'L': 'Local', 'P': 'Physical'}),
-                'Attack Complexity': self._extract_cvss_component(rd.cvss_vector, 'AC', {'L': 'Low', 'H': 'High'}),
-                'Privileges Required': self._extract_cvss_component(rd.cvss_vector, 'PR', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                'User Interaction': self._extract_cvss_component(rd.cvss_vector, 'UI', {'N': 'None', 'R': 'Required'}),
-                'Scope': self._extract_cvss_component(rd.cvss_vector, 'S', {'U': 'Unchanged', 'C': 'Changed'}),
-                'Confidentiality Impact': self._extract_cvss_component(rd.cvss_vector, 'C', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                'Integrity Impact': self._extract_cvss_component(rd.cvss_vector, 'I', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                'Availability Impact': self._extract_cvss_component(rd.cvss_vector, 'A', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                
-                # Threat intelligence fields
-                'Exploit Count': len(exploit_urls),
-                'Exploit Maturity': rd.exploit_maturity,
-                'Exploit Types': '; '.join([e.type for e in rd.exploits]) if rd.exploits else '',
-                'CISA KEV': 'Yes' if rd.threat.in_kev else 'No',
-                'EPSS Score': rd.threat.epss_score if rd.threat.epss_score else '',
-                'EPSS Percentile': rd.threat.epss_percentile if rd.threat.epss_percentile else '',
-                'Actively Exploited': 'Yes' if rd.threat.actively_exploited else 'No',
-                'Has Metasploit': 'Yes' if rd.threat.has_metasploit else 'No',
-                'Has Nuclei': 'Yes' if rd.threat.has_nuclei else 'No',
-                'CAPEC IDs': '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
-                'Attack Techniques': '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
-                'Attack Tactics': '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
-                'Reference Count': len(rd.references),
-                'CPE Affected Count': len(rd.cpe_affected),
-                'Vendor Advisories': '; '.join(rd.vendor_advisories) if rd.vendor_advisories else '',
-                'Patches': '; '.join(rd.patches) if rd.patches else ''
-            })
+            rows.append(self._generate_export_row(rd))
         
         if not pd:
             raise RuntimeError("pandas is required for CSV export")
@@ -490,86 +588,14 @@ class ResearchReportGenerator:
         console.print(f"[green]✓[/green] Research report exported to {path}")
     
     def _export_excel(self, data: List[ResearchData], path: Path) -> None:
-        """Export to Excel format with clean, relevant fields only."""
+        """Export to Excel format with all fields using standardized row generation."""
         if not PANDAS_AVAILABLE:
             print("Excel export requires pandas. Install with: pip install pandas openpyxl")
             return
         
         rows = []
         for rd in data:
-            # Extract fix/upgrade references
-            fix_versions = []
-            mitigations = []
-            for ref in rd.references:
-                # Simple heuristic for upgrade/fix URLs
-                if any(word in ref.lower() for word in ['upgrade', 'update', 'patch', 'fix', 'release']):
-                    fix_versions.append(ref)
-                elif any(word in ref.lower() for word in ['advisory', 'bulletin', 'security', 'mitigat']):
-                    mitigations.append(ref)
-            
-            # Format affected products (vendor, product, version)
-            affected_str = ""
-            if rd.cpe_affected:
-                # Parse CPE strings to extract vendor/product/version
-                affected_parts = []
-                for cpe in rd.cpe_affected[:10]:  # Limit to 10 for readability
-                    parts = cpe.split(':')
-                    if len(parts) >= 5:
-                        vendor = parts[3]
-                        product = parts[4]
-                        version = parts[5] if len(parts) > 5 else '*'
-                        affected_parts.append(f"{vendor} {product} {version}")
-                affected_str = "; ".join(affected_parts)
-            
-            # Filter ExploitRefs to only include actual exploit URLs (not NVD references)
-            exploit_urls = []
-            for exploit in rd.exploits:
-                if exploit.url and not any(domain in exploit.url.lower() for domain in ['cve.mitre.org', 'nvd.nist.gov']):
-                    exploit_urls.append(exploit.url)
-            
-            rows.append({
-                # Core CVE fields
-                'CVE ID': rd.cve_id,
-                'Description': rd.description,
-                'CVSS': rd.cvss_score,
-                'Severity': rd.severity,
-                'Vector': rd.cvss_vector,
-                'CWE': '; '.join(rd.weakness.cwe_ids) if rd.weakness.cwe_ids else '',
-                'Exploit': 'Yes' if exploit_urls else 'No',
-                'ExploitRefs': '; '.join(exploit_urls),
-                'FixVersion': fix_versions[0] if fix_versions else '',
-                'Mitigations': '; '.join(mitigations[:3]) if mitigations else '',
-                'Affected': affected_str,
-                'References': ', '.join(rd.references),
-                
-                # CVSS Metric Breakdown
-                'Attack Vector': self._extract_cvss_component(rd.cvss_vector, 'AV', {'N': 'Network', 'A': 'Adjacent', 'L': 'Local', 'P': 'Physical'}),
-                'Attack Complexity': self._extract_cvss_component(rd.cvss_vector, 'AC', {'L': 'Low', 'H': 'High'}),
-                'Privileges Required': self._extract_cvss_component(rd.cvss_vector, 'PR', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                'User Interaction': self._extract_cvss_component(rd.cvss_vector, 'UI', {'N': 'None', 'R': 'Required'}),
-                'Scope': self._extract_cvss_component(rd.cvss_vector, 'S', {'U': 'Unchanged', 'C': 'Changed'}),
-                'Confidentiality Impact': self._extract_cvss_component(rd.cvss_vector, 'C', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                'Integrity Impact': self._extract_cvss_component(rd.cvss_vector, 'I', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                'Availability Impact': self._extract_cvss_component(rd.cvss_vector, 'A', {'N': 'None', 'L': 'Low', 'H': 'High'}),
-                
-                # Threat intelligence fields
-                'Exploit Count': len(exploit_urls),
-                'Exploit Maturity': rd.exploit_maturity,
-                'Exploit Types': '; '.join([e.type for e in rd.exploits]) if rd.exploits else '',
-                'CISA KEV': 'Yes' if rd.threat.in_kev else 'No',
-                'EPSS Score': rd.threat.epss_score if rd.threat.epss_score else '',
-                'EPSS Percentile': rd.threat.epss_percentile if rd.threat.epss_percentile else '',
-                'Actively Exploited': 'Yes' if rd.threat.actively_exploited else 'No',
-                'Has Metasploit': 'Yes' if rd.threat.has_metasploit else 'No',
-                'Has Nuclei': 'Yes' if rd.threat.has_nuclei else 'No',
-                'CAPEC IDs': '; '.join(rd.weakness.capec_ids) if rd.weakness.capec_ids else '',
-                'Attack Techniques': '; '.join(rd.weakness.attack_techniques) if rd.weakness.attack_techniques else '',
-                'Attack Tactics': '; '.join(rd.weakness.attack_tactics) if rd.weakness.attack_tactics else '',
-                'Reference Count': len(rd.references),
-                'CPE Affected Count': len(rd.cpe_affected),
-                'Vendor Advisories': '; '.join(rd.vendor_advisories) if rd.vendor_advisories else '',
-                'Patches': '; '.join(rd.patches) if rd.patches else ''
-            })
+            rows.append(self._generate_export_row(rd))
         
         if pd is not None:
             df = pd.DataFrame(rows)
