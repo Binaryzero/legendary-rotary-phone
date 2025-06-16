@@ -22,7 +22,7 @@ Before you begin, ensure you have the following installed:
 - Communicates with the FastAPI backend to display vulnerability data.
 
 ### Starting the full UI
-The helper script `start_ui.py` installs requirements and launches both the backend and frontend.
+The helper script `start_odin_ui.py` installs requirements and launches both the backend and frontend.
 
 ```bash
 # install Python and Node dependencies
