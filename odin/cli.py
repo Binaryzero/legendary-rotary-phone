@@ -78,7 +78,7 @@ def cli_main() -> None:
     @click.command()
     @click.argument('input_file', type=click.Path(exists=True), default='cves.txt')
     @click.option('--format', '-f', multiple=True, 
-                  type=click.Choice(['json', 'csv', 'markdown', 'excel']),
+                  type=click.Choice(['json', 'csv', 'markdown', 'excel', 'webui']),
                   default=['markdown'], help='Output format(s)')
     @click.option('--output-dir', '-o', default='research_output', 
                   help='Output directory for reports')
@@ -158,6 +158,8 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
         filename = f"research_report_{timestamp}.{fmt}"
         if fmt == "excel":
             filename = f"research_report_{timestamp}.xlsx"
+        elif fmt == "webui":
+            filename = f"research_report_{timestamp}.json"
         
         report_gen.export_research_data(
             research_results,
@@ -167,6 +169,13 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
     
     # Generate detailed reports if requested
     if detailed:
+        # Generate comprehensive JSON data for Web UI
+        webui_path = output_path / f"webui_data_{timestamp}.json"
+        report_gen.export_research_data(research_results, "json", webui_path)
+        console.print(f"[green]Comprehensive JSON data saved to {webui_path}[/green]")
+        console.print(f"[cyan]Start the Web UI with: python3 cve_research_ui.py --data-file {webui_path}[/cyan]")
+        
+        # Also generate individual detailed markdown reports
         details_dir = output_path / f"detailed_reports_{timestamp}"
         details_dir.mkdir(exist_ok=True)
         

@@ -9,51 +9,51 @@
 
 /* ODIN (OSINT Data Intelligence Nexus) - Professional Dark Mode Variables */
 :root {
-  /* Primary - Professional Dark Blues */
-  --brand-primary: #0f1419;
-  --brand-primary-dark: #0a0d11;
-  --brand-primary-light: #1a1f26;
+  /* ODIN Brand Colors - User Specified */
+  --brand-primary: #0D1B2A;        /* Background */
+  --brand-primary-dark: #0a1420;   /* Darker variation */
+  --brand-primary-light: #1B263B;  /* Panels */
   
-  /* Secondary - Professional Teal/Cyan */
-  --brand-secondary: #00d4aa;
-  --brand-secondary-hover: #00b894;
-  --brand-secondary-light: #26de81;
+  /* Secondary - ODIN Accent */
+  --brand-secondary: #56CFE1;      /* Accent */
+  --brand-secondary-hover: #4ab8cc;
+  --brand-secondary-light: #6dd8e8;
   
   /* Neutral - Professional Grays */
-  --brand-neutral: #2d3238;
-  --brand-neutral-light: #3c434a;
-  --brand-neutral-lighter: #4a525a;
-  --brand-neutral-lightest: #5a626a;
+  --brand-neutral: #778DA9;        /* Muted */
+  --brand-neutral-light: #8a9bb8;
+  --brand-neutral-lighter: #9dacbc;
+  --brand-neutral-lightest: #b0bdc1;
   
-  /* Accent - Subtle Gold for highlights */
-  --brand-accent: #ffd700;
-  --brand-accent-hover: #e6c200;
+  /* Accent - ODIN Highlight */
+  --brand-accent: #FFC300;         /* Highlight */
+  --brand-accent-hover: #e6af00;
   
-  /* Background Colors - Professional Dark Theme */
-  --bg-primary: #0f1419;
-  --bg-secondary: #1a1f26;
-  --bg-tertiary: #2d3238;
-  --border-color: #4a525a;
+  /* Background Colors - ODIN Theme */
+  --bg-primary: #0D1B2A;           /* Background */
+  --bg-secondary: #1B263B;         /* Panels */
+  --bg-tertiary: #243447;          /* Darker panel variation */
+  --border-color: #778DA9;         /* Muted for borders */
   
-  /* Text Colors - High Contrast for Readability */
-  --text-primary: #ffffff;
-  --text-secondary: #e2e8f0;
-  --text-muted: #a0aab5;
+  /* Text Colors - ODIN Specified */
+  --text-primary: #E0E1DD;         /* Text */
+  --text-secondary: #c5c6c1;       /* Secondary text */
+  --text-muted: #778DA9;           /* Muted */
   
-  /* Interactive Colors */
-  --accent-blue: #00d4aa;
-  --accent-blue-hover: #00b894;
+  /* Interactive Colors - ODIN Based */
+  --accent-blue: #56CFE1;          /* Accent */
+  --accent-blue-hover: #4ab8cc;
   --accent-red: #ff6b6b;
   --accent-red-hover: #ee5a52;
   --accent-green: #26de81;
-  --accent-yellow: #ffd700;
+  --accent-yellow: #FFC300;        /* Highlight */
   --accent-orange: #ff9f43;
   
   /* Status Colors */
   --success: #26de81;
-  --warning: #ffc048;
+  --warning: #FFC300;              /* Highlight */
   --error: #ff6b6b;
-  --info: #00d4aa;
+  --info: #56CFE1;                 /* Accent */
 }
 
 .app-header {
@@ -128,7 +128,7 @@
 .research-section textarea:focus {
   outline: none;
   border-color: var(--brand-secondary);
-  box-shadow: 0 0 0 3px rgba(57, 160, 170, 0.1);
+  box-shadow: 0 0 0 3px rgba(86, 207, 225, 0.1);
 }
 
 .research-section textarea::placeholder {
@@ -177,7 +177,7 @@
 .filters select:focus {
   outline: none;
   border-color: var(--brand-secondary);
-  box-shadow: 0 0 0 3px rgba(57, 160, 170, 0.1);
+  box-shadow: 0 0 0 3px rgba(86, 207, 225, 0.1);
 }
 
 .filters input::placeholder {
@@ -413,11 +413,11 @@
   --ag-header-background-color: var(--brand-primary-dark);
   --ag-header-foreground-color: var(--brand-secondary);
   --ag-border-color: var(--border-color);
-  --ag-row-hover-color: rgba(57, 160, 170, 0.1);
-  --ag-selected-row-background-color: rgba(57, 160, 170, 0.15);
+  --ag-row-hover-color: rgba(86, 207, 225, 0.1);
+  --ag-selected-row-background-color: rgba(86, 207, 225, 0.15);
   --ag-background-color: var(--bg-secondary);
   --ag-foreground-color: var(--text-secondary);
-  --ag-odd-row-background-color: rgba(0, 34, 68, 0.3);
+  --ag-odd-row-background-color: rgba(13, 27, 42, 0.3);
   --ag-cell-horizontal-border: var(--border-color);
   font-size: 1rem;
 }
@@ -692,7 +692,7 @@
 
 .metric-card:hover {
   border-color: var(--accent-blue);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 12px rgba(86, 207, 225, 0.1);
 }
 
 .metric-label {
@@ -840,11 +840,11 @@
 }
 
 .exploits-table tr:nth-child(even) {
-  background: rgba(15, 23, 42, 0.3);
+  background: rgba(13, 27, 42, 0.3);
 }
 
 .exploits-table tr:hover {
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(86, 207, 225, 0.05);
 }
 
 .exploit-type {
