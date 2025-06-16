@@ -34,6 +34,12 @@ Install Python dependencies and run tests using `pytest`:
 ```bash
 pip install -r requirements.txt
 python -m pytest
-```
+Install Python dependencies and run tests using `pytest`:
+
+This project uses several tools for maintaining code quality, including `flake8`, `black`, `isort`, and `mypy`. These are often managed via `pre-commit` to ensure checks are run before commits.
+
+To run all pre-commit hooks:
+```bash
+pre-commit run --all-files
 
 The tests are located in the `tests/` directory and exercise both the toolkit libraries and error handling utilities.
