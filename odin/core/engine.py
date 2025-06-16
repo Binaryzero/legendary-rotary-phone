@@ -34,7 +34,11 @@ from ..models.data import (
     ResearchData, 
     ExploitReference, 
     ThreatContext, 
-    WeaknessTactics
+    WeaknessTactics,
+    SessionCache,
+    EnhancedProblemType,
+    ControlMappings,
+    ProductIntelligence
 )
 
 # Import connectors from the new modular structure

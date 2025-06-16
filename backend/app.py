@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CVE Research Toolkit - FastAPI Backend
+ODIN - FastAPI Backend
 High-performance API for vulnerability data with server-side pagination and filtering.
 """
 
@@ -19,7 +19,8 @@ from pydantic import BaseModel
 
 # Import the research toolkit
 try:
-    from cve_research_toolkit_fixed import VulnerabilityResearchEngine, ResearchData
+    from odin.core.engine import VulnerabilityResearchEngine
+    from odin.models.data import ResearchData
     TOOLKIT_AVAILABLE = True
 except ImportError:
     TOOLKIT_AVAILABLE = False

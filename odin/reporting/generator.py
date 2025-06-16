@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report generation module for CVE Research Toolkit.
+"""Report generation module for ODIN.
 
 Provides comprehensive reporting capabilities including Excel, CSV, JSON,
 and Markdown export formats with detailed vulnerability analysis.

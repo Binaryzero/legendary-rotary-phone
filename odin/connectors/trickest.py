@@ -21,7 +21,7 @@ class TrickestConnector(DataSourceConnector):
     def __init__(self) -> None:
         """Initialize connector with request headers."""
         self.headers = {
-            'User-Agent': 'CVE-Research-Toolkit/1.0 (Security Research Tool)',
+            'User-Agent': 'ODIN/1.0 (Security Research Tool)',
             'Accept': 'text/markdown, text/plain, */*',
             'Accept-Encoding': 'gzip, deflate'
         }

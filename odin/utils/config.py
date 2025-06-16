@@ -1,4 +1,4 @@
-"""Configuration and constants utilities for CVE Research Toolkit."""
+"""Configuration and constants utilities for ODIN."""
 
 from pathlib import Path
 from typing import Any, Dict

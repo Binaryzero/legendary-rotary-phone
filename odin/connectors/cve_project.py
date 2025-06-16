@@ -25,7 +25,7 @@ class CVEProjectConnector(DataSourceConnector):
     def __init__(self) -> None:
         """Initialize connector with request headers."""
         self.headers = {
-            'User-Agent': 'CVE-Research-Toolkit/1.0 (Security Research Tool)',
+            'User-Agent': 'ODIN/1.0 (Security Research Tool)',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Encoding': 'gzip, deflate'
         }
@@ -158,7 +158,15 @@ class CVEProjectConnector(DataSourceConnector):
             )
     
     def _parse_cve_data(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Internal parsing logic with detailed error context."""
+        """
+        Internal parsing logic with detailed error context.
+        
+        Parses CVE JSON 5.x data to extract vulnerability details and structured product intelligence.
+        Extracts the vulnerability description, CVSS score and vector, CWE identifiers and descriptions, 
+        categorized references (including patches, vendor advisories, mitigations, and fix versions), 
+        affected products, CPE-style identifiers, publication and modification dates, and detailed 
+        product intelligence such as vendors, products, versions, platforms, modules, and repositories.
+        """
         containers = data.get("containers", {})
         cna = containers.get("cna", {})
         
@@ -197,12 +205,131 @@ class CVEProjectConnector(DataSourceConnector):
                 if cvss_score > 0:
                     break
         
-        # Extract references
+        # Extract CWE information
+        cwe_ids = []
+        cwe_descriptions = []
+        
+        # Check CNA problemTypes for CWE data
+        for problem_type in cna.get("problemTypes", []):
+            for desc in problem_type.get("descriptions", []):
+                if desc.get("type") == "CWE" and desc.get("cweId"):
+                    cwe_id = desc.get("cweId", "")
+                    cwe_desc = desc.get("description", "")
+                    if cwe_id and cwe_id not in cwe_ids:
+                        cwe_ids.append(cwe_id)
+                        if cwe_desc:
+                            cwe_descriptions.append(f"{cwe_id}: {cwe_desc}")
+        
+        # Also check ADP entries for additional CWE data
+        for adp in containers.get("adp", []):
+            for problem_type in adp.get("problemTypes", []):
+                for desc in problem_type.get("descriptions", []):
+                    if desc.get("type") == "CWE" and desc.get("cweId"):
+                        cwe_id = desc.get("cweId", "")
+                        cwe_desc = desc.get("description", "")
+                        if cwe_id and cwe_id not in cwe_ids:
+                            cwe_ids.append(cwe_id)
+                            if cwe_desc:
+                                cwe_descriptions.append(f"{cwe_id}: {cwe_desc}")
+        
+        # Extract references and categorize them
         references = []
+        fix_versions = []
+        mitigations = []
+        vendor_advisories = []
+        patches = []
+        
         for ref in cna.get("references", []):
             url = ref.get("url", "")
-            if url:
-                references.append(url)
+            if not url:
+                continue
+                
+            references.append(url)
+            
+            # Categorize references based on tags and URL patterns
+            tags = ref.get("tags", [])
+            url_lower = url.lower()
+            
+            # Identify fix/upgrade references
+            if any(tag in ["patch", "vendor-advisory", "fix", "upgrade"] for tag in tags):
+                if "patch" in tags or "fix" in tags:
+                    patches.append(url)
+                elif "upgrade" in tags or "vendor-advisory" in tags:
+                    fix_versions.append(url)
+                    vendor_advisories.append(url)
+            
+            # Pattern-based categorization for untagged references
+            elif any(pattern in url_lower for pattern in ["security-advisories", "advisory", "bulletin", "alert"]):
+                vendor_advisories.append(url)
+            elif any(pattern in url_lower for pattern in ["patch", "fix", "update", "upgrade", "release-notes"]):
+                if "patch" in url_lower or "fix" in url_lower:
+                    patches.append(url)
+                else:
+                    fix_versions.append(url)
+            elif any(pattern in url_lower for pattern in ["mitigation", "workaround", "guidance"]):
+                mitigations.append(url)
+        
+        # Extract affected products (CVE 5.0 format) - Enhanced with structured data
+        affected_products = []
+        cpe_affected = []
+        
+        # Product intelligence extraction
+        vendors = []
+        products = []
+        affected_versions = []
+        platforms = []
+        modules = []
+        repositories = []
+        
+        for product in cna.get("affected", []):
+            vendor = product.get("vendor", "")
+            product_name = product.get("product", "")
+            
+            if vendor and product_name:
+                # Create human-readable affected product entry
+                affected_products.append(f"{vendor} {product_name}")
+                
+                # Generate CPE-style identifier for compatibility
+                # Note: This isn't a full CPE but provides affected product info
+                cpe_affected.append(f"cpe:2.3:a:{vendor.lower().replace(' ', '_')}:{product_name.lower().replace(' ', '_')}:*:*:*:*:*:*:*:*")
+                
+                # Extract structured product intelligence
+                if vendor not in vendors:
+                    vendors.append(vendor)
+                if product_name not in products:
+                    products.append(product_name)
+                
+                # Extract repository information
+                repo_url = product.get("repo", "")
+                if repo_url and repo_url not in repositories:
+                    repositories.append(repo_url)
+                
+                # Extract platform information
+                product_platforms = product.get("platforms", [])
+                for platform in product_platforms:
+                    if platform not in platforms:
+                        platforms.append(platform)
+                
+                # Extract module information
+                product_modules = product.get("modules", [])
+                for module in product_modules:
+                    if module not in modules:
+                        modules.append(module)
+                
+                # Add version information if available
+                versions = product.get("versions", [])
+                if versions:
+                    version_info = []
+                    for version in versions[:5]:  # Limit to first 5 versions to avoid bloat
+                        version_str = version.get("version", "")
+                        status = version.get("status", "")
+                        if version_str:
+                            version_info.append(f"{version_str} ({status})" if status else version_str)
+                            # Add to structured version list
+                            if version_str not in affected_versions:
+                                affected_versions.append(version_str)
+                    if version_info:
+                        affected_products.append(f"  Versions: {', '.join(version_info)}")
         
         # Extract dates
         metadata = data.get("cveMetadata", {})
@@ -213,9 +340,26 @@ class CVEProjectConnector(DataSourceConnector):
             "description": description,
             "cvss_score": cvss_score,
             "cvss_vector": cvss_vector,
+            "cwe_ids": cwe_ids,
+            "cwe_descriptions": cwe_descriptions,
             "references": references,
+            "fix_versions": fix_versions,
+            "mitigations": mitigations,
+            "vendor_advisories": vendor_advisories,
+            "patches": patches,
             "published_date": published,
-            "last_modified": modified
+            "last_modified": modified,
+            "affected_products": affected_products,
+            "cpe_affected": cpe_affected,
+            # Enhanced product intelligence
+            "product_intelligence": {
+                "vendors": vendors,
+                "products": products,
+                "affected_versions": affected_versions,
+                "platforms": platforms,
+                "modules": modules,
+                "repositories": repositories
+            }
         }
         
         logger.debug(f"{cve_id} parsed: CVSS={cvss_score}, desc_length={len(description)}, refs={len(references)}")
