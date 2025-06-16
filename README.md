@@ -29,7 +29,7 @@ The helper script `start_odin_ui.py` installs requirements and launches both the
 python start_ui.py --install
 
 # start the API on port 8000 and the frontend on port 3000
-python start_ui.py
+python start_odin_ui.py
 ```
 
 To customise ports use `--backend-port` and `--frontend-port`.
