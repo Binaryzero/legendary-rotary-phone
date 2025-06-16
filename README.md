@@ -28,6 +28,8 @@ python start_ui.py
 
 To customise ports use `--backend-port` and `--frontend-port`.
 
+Once the backend is running, API documentation is typically available at `http://localhost:8000/docs`.
+
 ## Development
 Install Python dependencies and run tests using `pytest`:
 
