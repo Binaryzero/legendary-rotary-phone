@@ -41,6 +41,9 @@ from ..models.data import (
     ProductIntelligence
 )
 
+# Import utilities
+from ..utils.control_mapper import ControlMapper
+
 # Import connectors from the new modular structure
 from ..connectors import (
     CVEProjectConnector,
@@ -61,6 +64,9 @@ class VulnerabilityResearchEngine:
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
         
+        # Initialize session cache for performance optimization
+        self.session_cache = SessionCache()
+        
         # Initialize connectors in correct layer order
         self.connectors = {
             DataLayer.FOUNDATIONAL: CVEProjectConnector(),           # Layer 1: CVEProject/cvelistV5
@@ -70,13 +76,32 @@ class VulnerabilityResearchEngine:
             DataLayer.RAW_INTELLIGENCE: PatrowlConnector()           # Layer 5: Patrowl/PatrowlHearsData
         }
         
+        # Initialize control mapper for NIST 800-53 mappings
+        self.control_mapper = ControlMapper()
+        
         # Additional Layer 4 connector for CVSS-BT data
         self.cvss_bt_connector = CVSSBTConnector()
+        
+        # Set session cache for connectors that support it
+        for connector in [self.connectors[DataLayer.THREAT_CONTEXT], 
+                         self.connectors[DataLayer.WEAKNESS_TACTICS], 
+                         self.cvss_bt_connector]:
+            if hasattr(connector, 'set_session_cache'):
+                connector.set_session_cache(self.session_cache)
         
         
     
     async def research_cve(self, cve_id: str) -> ResearchData:
         """Perform comprehensive research on a CVE."""
+        # Check session cache for duplicate CVE research
+        if cve_id in self.session_cache.cve_data:
+            self.session_cache.session_stats["cache_hits"] += 1
+            self.session_cache.session_stats["duplicate_cves"] += 1
+            logger.debug(f"Using cached data for duplicate CVE: {cve_id}")
+            # Build from cached data
+            cached_results = self.session_cache.cve_data[cve_id]
+            return self._build_research_data(cve_id, cached_results)
+        
         # Fetch from all sources concurrently
         if not AIOHTTP_AVAILABLE:
             logger.error("aiohttp is required for CVE research. Install with: pip install aiohttp")
@@ -110,6 +135,13 @@ class VulnerabilityResearchEngine:
                             results[DataLayer.THREAT_CONTEXT]["cvss_bt"] = {}
                         results[DataLayer.THREAT_CONTEXT]["cvss_bt"].update(parsed)
                     elif isinstance(layer, DataLayer):
+                        # Special handling for MITRE connector to pass foundational CWE data
+                        if layer == DataLayer.WEAKNESS_TACTICS:
+                            foundational_data = results.get(DataLayer.FOUNDATIONAL, {})
+                            cwe_ids = foundational_data.get("cwe_ids", [])
+                            data["foundational_cwe"] = cwe_ids
+                            logger.debug(f"Passing {len(cwe_ids)} CWE IDs to MITRE connector for {cve_id}")
+                        
                         parsed = self.connectors[layer].parse(cve_id, data)
                         results[layer] = parsed
                     
@@ -145,6 +177,9 @@ class VulnerabilityResearchEngine:
         
         # Build ResearchData object
         research_data = self._build_research_data(cve_id, results)
+        
+        # Store results in session cache for potential duplicate lookups
+        self.session_cache.cve_data[cve_id] = results
         
         # Log if no CVSS score found
         if research_data.cvss_score == 0.0 and research_data.description:
@@ -212,31 +247,77 @@ class VulnerabilityResearchEngine:
         if not description:
             description = f"CVE {cve_id} - Description not available from external sources"
         
+        # Extract CVSS version and CVSS-BT data
+        cvss_version = foundational.get("cvss_version", "")
+        cvss_bt_data = threat_context.get("cvss_bt", {})
+        cvss_bt_score = cvss_bt_data.get("cvss_bt_score", 0.0)
+        cvss_bt_severity = cvss_bt_data.get("cvss_bt_severity", "")
+
         research_data = ResearchData(
             cve_id=cve_id,
             description=description,
             cvss_score=cvss_score,
             cvss_vector=cvss_vector,
             severity=severity,
+            cvss_version=cvss_version,
+            cvss_bt_score=cvss_bt_score,
+            cvss_bt_severity=cvss_bt_severity,
             published_date=published,
             last_modified=published,
             references=foundational.get("references", [])
         )
         
-        # Add enhanced data from Patrowl (Layer 5 - Raw Intelligence)
-        if raw_intelligence:
-            # Merge CPE affected products
+        # Add enhanced data from CVE Project (Layer 1 - Foundational)
+        if foundational:
+            # Use CVE Project's CPE data as primary source
+            cve_cpe = foundational.get("cpe_affected", [])
+            if cve_cpe:
+                research_data.cpe_affected.extend(cve_cpe)
+            
+            # Map vendor advisories and patches from categorized references
+            research_data.vendor_advisories = foundational.get("vendor_advisories", [])
+            research_data.patches = foundational.get("patches", [])
+            research_data.mitigations = foundational.get("mitigations", [])
+            research_data.fix_versions = foundational.get("fix_versions", [])
+            research_data.alternative_cvss_scores = foundational.get("alternative_cvss_scores", [])
+            research_data.reference_tags = foundational.get("reference_tags", [])
+            
+            # Map product intelligence
+            product_intel = foundational.get("product_intelligence", {})
+            if product_intel:
+                research_data.product_intelligence.vendors = product_intel.get("vendors", [])
+                research_data.product_intelligence.products = product_intel.get("products", [])
+                research_data.product_intelligence.affected_versions = product_intel.get("affected_versions", [])
+                research_data.product_intelligence.platforms = product_intel.get("platforms", [])
+                research_data.product_intelligence.modules = product_intel.get("modules", [])
+            
+            # Map enhanced problem type
+            enhanced_problem = foundational.get("enhanced_problem_type", {})
+            if enhanced_problem:
+                research_data.enhanced_problem_type.type = enhanced_problem.get("type", "")
+                research_data.enhanced_problem_type.description = enhanced_problem.get("description", "")
+                research_data.enhanced_problem_type.cwe_mapping = enhanced_problem.get("cwe_mapping", [])
+                research_data.enhanced_problem_type.primary_weakness = enhanced_problem.get("primary_weakness", "")
+                research_data.enhanced_problem_type.secondary_weaknesses = enhanced_problem.get("secondary_weaknesses", [])
+                research_data.enhanced_problem_type.vulnerability_categories = enhanced_problem.get("vulnerability_categories", [])
+                research_data.enhanced_problem_type.impact_types = enhanced_problem.get("impact_types", [])
+                research_data.enhanced_problem_type.attack_vectors = enhanced_problem.get("attack_vectors", [])
+                research_data.enhanced_problem_type.enhanced_cwe_details = enhanced_problem.get("enhanced_cwe_details", [])
+            
+            # Map control mappings
+            control_map = foundational.get("control_mappings", {})
+            if control_map:
+                research_data.control_mappings.nist_controls = control_map.get("nist_controls", [])
+                research_data.control_mappings.recommended_controls = control_map.get("recommended_controls", [])
+                research_data.control_mappings.security_categories = control_map.get("security_categories", [])
+        
+        # Add enhanced data from Patrowl (Layer 5 - Raw Intelligence) as fallback
+        if raw_intelligence and not research_data.cpe_affected:
+            # Use Patrowl CPE only if CVE Project didn't provide any
             patrowl_cpe = raw_intelligence.get("cpe_affected", [])
             research_data.cpe_affected.extend(patrowl_cpe)
-            
-            # Store impact metrics as additional metadata
-            impact_metrics = raw_intelligence.get("impact_metrics", {})
-            if impact_metrics:
-                # Store in a way that doesn't conflict with existing fields
-                research_data.patches.append(f"Impact Score: {impact_metrics.get('impact_score', 'N/A')}")
-                research_data.patches.append(f"Exploitability Score: {impact_metrics.get('exploitability_score', 'N/A')}")
         
-        # Add exploit data with error handling
+        # Add exploit data with error handling and enhanced fields
         exploit_data = results.get(DataLayer.EXPLOIT_MECHANICS, {})
         exploits_added = 0
         for exploit in exploit_data.get("exploits", []):
@@ -245,7 +326,9 @@ class VulnerabilityResearchEngine:
                     research_data.exploits.append(ExploitReference(
                         url=exploit["url"],
                         source=exploit["source"],
-                        type=exploit["type"]
+                        type=exploit["type"],
+                        verified=exploit.get("verified", False),
+                        title=exploit.get("title", "")
                     ))
                     exploits_added += 1
             except Exception as e:
@@ -269,19 +352,64 @@ class VulnerabilityResearchEngine:
         epss_threat_data = threat_context.get("threat", {})  # From ThreatContextConnector (EPSS)
         cvss_bt_threat_data = threat_context.get("cvss_bt", {}).get("threat", {})  # From CVSS-BT
         
-        # Merge threat data from Layer 4 sources (Real-World Context)
-        research_data.threat.in_kev = cvss_bt_threat_data.get("in_kev", epss_threat_data.get("in_kev", False))
-        research_data.threat.epss_score = epss_threat_data.get("epss_score") or cvss_bt_threat_data.get("epss_score")
-        research_data.threat.actively_exploited = cvss_bt_threat_data.get("in_kev", epss_threat_data.get("actively_exploited", False))
+        # Use threat data from Layer 4 sources (Real-World Context)
+        # ThreatContextConnector now returns empty data after ARPSyndicate removal
+        research_data.threat.in_kev = cvss_bt_threat_data.get("in_kev", False)
+        research_data.threat.epss_score = cvss_bt_threat_data.get("epss_score")
+        research_data.threat.actively_exploited = cvss_bt_threat_data.get("in_kev", False)
         research_data.threat.has_metasploit = cvss_bt_threat_data.get("has_metasploit", False)
         research_data.threat.has_nuclei = False  # Would come from other sources
+        research_data.threat.has_exploitdb = cvss_bt_threat_data.get("has_exploitdb", False)
+        research_data.threat.has_poc_github = cvss_bt_threat_data.get("has_poc_github", False)
+        research_data.threat.vulncheck_kev = cvss_bt_threat_data.get("vulncheck_kev", False)
         
-        # Add weakness data with fallback
+        # Add temporal CVSS fields - prefer CVE Project data over CVSS-BT
+        temporal_cvss = foundational.get("temporal_cvss", {})
+        if temporal_cvss:
+            # Use temporal data from CVE Project (authoritative source)
+            research_data.threat.exploit_code_maturity = temporal_cvss.get("exploit_code_maturity", "")
+            research_data.threat.remediation_level = temporal_cvss.get("remediation_level", "")
+            research_data.threat.report_confidence = temporal_cvss.get("report_confidence", "")
+        else:
+            # Fallback to CVSS-BT temporal data
+            research_data.threat.exploit_code_maturity = cvss_bt_threat_data.get("exploit_code_maturity", "")
+            research_data.threat.remediation_level = cvss_bt_threat_data.get("remediation_level", "")
+            research_data.threat.report_confidence = cvss_bt_threat_data.get("report_confidence", "")
+        
+        # Add weakness data with complete mapping including Phase 3 enhancements
         weakness_data = results.get(DataLayer.WEAKNESS_TACTICS, {})
-        if weakness_data.get("cwe_ids"):
-            research_data.weakness.cwe_ids = weakness_data["cwe_ids"]
-        if weakness_data.get("attack_techniques"):
-            research_data.weakness.attack_techniques = weakness_data["attack_techniques"]
+        if weakness_data:
+            research_data.weakness.cwe_ids = weakness_data.get("cwe_ids", [])
+            research_data.weakness.capec_ids = weakness_data.get("capec_ids", [])
+            research_data.weakness.attack_techniques = weakness_data.get("attack_techniques", [])
+            research_data.weakness.attack_tactics = weakness_data.get("attack_tactics", [])
+            research_data.weakness.kill_chain_phases = weakness_data.get("kill_chain_phases", [])
+            research_data.weakness.cwe_details = weakness_data.get("cwe_details", [])
+            research_data.weakness.capec_details = weakness_data.get("capec_details", [])
+            research_data.weakness.technique_details = weakness_data.get("technique_details", [])
+            research_data.weakness.tactic_details = weakness_data.get("tactic_details", [])
+            # Phase 3: Enhanced MITRE human-readable descriptions
+            research_data.weakness.enhanced_technique_descriptions = weakness_data.get("enhanced_technique_descriptions", [])
+            research_data.weakness.enhanced_tactic_descriptions = weakness_data.get("enhanced_tactic_descriptions", [])
+            research_data.weakness.enhanced_capec_descriptions = weakness_data.get("enhanced_capec_descriptions", [])
+            
+        # Add alternative CWE mappings from CVE Project ADP entries
+        if foundational:
+            research_data.weakness.alternative_cwe_mappings = foundational.get("alternative_cwe_mappings", [])
+
+        # Map CISA KEV details from MITRE connector if available
+        mitre_kev_data = weakness_data.get("kev_info", {})
+        if mitre_kev_data and mitre_kev_data.get("in_kev"):
+            research_data.threat.in_kev = True
+            research_data.threat.kev_vulnerability_name = mitre_kev_data.get("vulnerability_name", "")
+            research_data.threat.kev_short_description = mitre_kev_data.get("short_description", "")
+            research_data.threat.kev_vendor_project = mitre_kev_data.get("vendor_project", "")
+            research_data.threat.kev_product = mitre_kev_data.get("product", "")
+            research_data.threat.kev_date_added = mitre_kev_data.get("date_added", "")
+            research_data.threat.kev_due_date = mitre_kev_data.get("due_date", "")
+            research_data.threat.kev_required_action = mitre_kev_data.get("required_action", "")
+            research_data.threat.kev_known_ransomware = mitre_kev_data.get("known_ransomware_use", "Unknown")
+            research_data.threat.kev_notes = mitre_kev_data.get("notes", "")
         
         research_data.last_enriched = datetime.now()
         
@@ -293,12 +421,21 @@ class VulnerabilityResearchEngine:
             sources_used.append("Patrowl")
         if threat_context.get("cvss_bt"):
             sources_used.append("CVSS-BT")
-        if threat_context.get("threat"):
-            sources_used.append("EPSS")
         if results.get(DataLayer.EXPLOIT_MECHANICS):
             sources_used.append("Trickest")
         
-        logger.debug(f"Data sources used for {cve_id}: {', '.join(sources_used)} (CVSS from {cvss_source})")
+        logger.debug(f"Data sources used for {cve_id}: {', '.join(sources_used)} (CVSS from {cvss_source}, EPSS from CVSS-BT)")
+        
+        # Add NIST 800-53 control mappings based on ATT&CK techniques
+        if research_data.weakness.attack_techniques:
+            control_mappings = self.control_mapper.get_controls_for_techniques(research_data.weakness.attack_techniques)
+            
+            # Store control data in structured control mappings field
+            research_data.control_mappings.applicable_controls_count = control_mappings['applicable_controls_count']
+            if control_mappings['control_categories']:
+                research_data.control_mappings.control_categories = control_mappings['control_categories'].split('; ')
+            if control_mappings['top_controls']:
+                research_data.control_mappings.top_controls = control_mappings['top_controls'].split('; ')
         
         return research_data
     
@@ -344,5 +481,11 @@ class VulnerabilityResearchEngine:
                 results.append(result)
                 if i % 10 == 0:
                     print(f"Progress: {i}/{len(cve_ids)} CVEs processed")
+        
+        # Log session cache statistics
+        logger.info(f"Session cache statistics: "
+                   f"cache_hits={self.session_cache.session_stats['cache_hits']}, "
+                   f"api_calls={self.session_cache.session_stats['api_calls']}, "
+                   f"duplicate_cves={self.session_cache.session_stats['duplicate_cves']}")
         
         return results

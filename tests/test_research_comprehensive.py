@@ -175,10 +175,12 @@ def test_connectors() -> None:
     parsed = mitre_connector.parse("CVE-2023-0001", {})
     assert "cwe_ids" in parsed
 
+    # ThreatContextConnector now returns empty data after ARPSyndicate removal
     threat_data = {"in_kev": True, "epss": {"score": 0.85, "percentile": 95.0}}
 
     parsed = threat_connector.parse("CVE-2023-0001", threat_data)
-    assert parsed.get("threat", {}).get("in_kev") is True
+    # Should return empty threat data as ARPSyndicate was removed
+    assert parsed.get("threat", {}) == {}
 
     print("PASS All connector tests passed!")
 

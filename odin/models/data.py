@@ -56,7 +56,6 @@ class ProductIntelligence:
     affected_versions: List[str] = field(default_factory=list)
     platforms: List[str] = field(default_factory=list)
     modules: List[str] = field(default_factory=list)
-    repositories: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -64,9 +63,10 @@ class ExploitReference:
     """Exploit reference information."""
     url: str
     source: str
-    type: str  # poc, metasploit, nuclei
+    type: str  # poc, metasploit, nuclei, exploit-db, github-poc, packetstorm
     verified: bool = False
     date_found: Optional[datetime] = None
+    title: str = ""  # Enhanced: exploit title/description
 
 
 @dataclass
@@ -75,17 +75,6 @@ class ThreatContext:
     in_kev: bool = False
     vulncheck_kev: bool = False
     epss_score: Optional[float] = None
-    epss_percentile: Optional[float] = None
-    vedas_score: Optional[float] = None
-    vedas_percentile: Optional[float] = None
-    vedas_score_change: Optional[float] = None
-    vedas_detail_url: str = ""
-    vedas_date: Optional[str] = None
-    # Temporal CVSS metrics
-    temporal_score: Optional[float] = None
-    exploit_code_maturity: str = ""
-    remediation_level: str = ""
-    report_confidence: str = ""
     has_metasploit: bool = False
     has_nuclei: bool = False
     has_exploitdb: bool = False
@@ -97,6 +86,15 @@ class ThreatContext:
     kev_short_description: str = ""
     kev_vendor_project: str = ""
     kev_product: str = ""
+    kev_date_added: str = ""
+    kev_due_date: str = ""
+    kev_required_action: str = ""
+    kev_known_ransomware: str = ""
+    kev_notes: str = ""
+    # Temporal CVSS fields (extracted from CVSS vectors)
+    exploit_code_maturity: str = ""
+    remediation_level: str = ""
+    report_confidence: str = ""
 
 
 @dataclass
@@ -112,6 +110,11 @@ class WeaknessTactics:
     capec_details: List[str] = field(default_factory=list)
     technique_details: List[str] = field(default_factory=list)
     tactic_details: List[str] = field(default_factory=list)
+    # Phase 3: Enhanced MITRE human-readable descriptions  
+    enhanced_technique_descriptions: List[str] = field(default_factory=list)
+    enhanced_tactic_descriptions: List[str] = field(default_factory=list)
+    enhanced_capec_descriptions: List[str] = field(default_factory=list)
+    alternative_cwe_mappings: List[str] = field(default_factory=list)  # Additional CWE from ADP
 
 
 @dataclass
@@ -123,6 +126,9 @@ class ResearchData:
     cvss_score: float = 0.0
     cvss_vector: str = ""
     severity: str = ""
+    cvss_version: str = ""  # CVSS version (e.g., "3.1", "2.0")
+    cvss_bt_score: float = 0.0  # Enhanced CVSS-BT score
+    cvss_bt_severity: str = ""  # Enhanced CVSS-BT severity
     published_date: Optional[datetime] = None
     last_modified: Optional[datetime] = None
     references: List[str] = field(default_factory=list)
@@ -141,6 +147,14 @@ class ResearchData:
     cpe_affected: List[str] = field(default_factory=list)
     vendor_advisories: List[str] = field(default_factory=list)
     patches: List[str] = field(default_factory=list)
+    
+    # Enhanced Reference Categorization (Phase 2)
+    mitigations: List[str] = field(default_factory=list)
+    fix_versions: List[str] = field(default_factory=list)
+    
+    # Phase 2 Intelligence Enhancement
+    alternative_cvss_scores: List[Dict[str, Any]] = field(default_factory=list)  # Additional CVSS from ADP
+    reference_tags: List[str] = field(default_factory=list)  # Actual CVE reference tags
     
     # Enhanced Analysis (Structured Fields)
     enhanced_problem_type: EnhancedProblemType = field(default_factory=EnhancedProblemType)
