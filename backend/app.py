@@ -18,11 +18,21 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # Import the research toolkit
+import sys
+import os
+from pathlib import Path
+
+# Add parent directory to path to find odin package
+backend_dir = Path(__file__).parent
+parent_dir = backend_dir.parent
+sys.path.insert(0, str(parent_dir))
+
 try:
     from odin.core.engine import VulnerabilityResearchEngine
     from odin.models.data import ResearchData
     TOOLKIT_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"Failed to import ODIN toolkit: {e}")
     TOOLKIT_AVAILABLE = False
 
 # Configure logging

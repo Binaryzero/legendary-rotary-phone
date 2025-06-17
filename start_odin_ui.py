@@ -64,6 +64,9 @@ def start_frontend(port=3000):
     
     env = os.environ.copy()
     env['PORT'] = str(port)
+    env['HOST'] = 'localhost'
+    env['DANGEROUSLY_DISABLE_HOST_CHECK'] = 'true'
+    env['FAST_REFRESH'] = 'false'
     
     return subprocess.Popen([
         "npm", "start"
