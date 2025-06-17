@@ -7,53 +7,47 @@
   color: var(--text-primary);
 }
 
-/* ODIN (OSINT Data Intelligence Nexus) - Professional Dark Mode Variables */
+/* ODIN (OSINT Data Intelligence Nexus) - Updated Color Scheme */
 :root {
-  /* ODIN Brand Colors - User Specified */
-  --brand-primary: #0D1B2A;        /* Background */
-  --brand-primary-dark: #0a1420;   /* Darker variation */
-  --brand-primary-light: #1B263B;  /* Panels */
+  /* Purpose-Driven Color Palette */
+  --brand-primary: #121212;        /* Background */
+  --brand-primary-light: #1E1E1E;  /* Panels */
+  --brand-border: #2C2C2C;         /* Borders */
+  --brand-accent: #3B82F6;         /* Accent */
   
-  /* Secondary - ODIN Accent */
-  --brand-secondary: #56CFE1;      /* Accent */
-  --brand-secondary-hover: #4ab8cc;
-  --brand-secondary-light: #6dd8e8;
-  
-  /* Neutral - Professional Grays */
-  --brand-neutral: #778DA9;        /* Muted */
-  --brand-neutral-light: #8a9bb8;
-  --brand-neutral-lighter: #9dacbc;
-  --brand-neutral-lightest: #b0bdc1;
-  
-  /* Accent - ODIN Highlight */
-  --brand-accent: #FFC300;         /* Highlight */
-  --brand-accent-hover: #e6af00;
-  
-  /* Background Colors - ODIN Theme */
-  --bg-primary: #0D1B2A;           /* Background */
-  --bg-secondary: #1B263B;         /* Panels */
-  --bg-tertiary: #243447;          /* Darker panel variation */
-  --border-color: #778DA9;         /* Muted for borders */
-  
-  /* Text Colors - ODIN Specified */
-  --text-primary: #E0E1DD;         /* Text */
-  --text-secondary: #c5c6c1;       /* Secondary text */
-  --text-muted: #778DA9;           /* Muted */
-  
-  /* Interactive Colors - ODIN Based */
-  --accent-blue: #56CFE1;          /* Accent */
-  --accent-blue-hover: #4ab8cc;
-  --accent-red: #ff6b6b;
-  --accent-red-hover: #ee5a52;
-  --accent-green: #26de81;
-  --accent-yellow: #FFC300;        /* Highlight */
-  --accent-orange: #ff9f43;
+  /* Text Colors */
+  --text-primary: #F4F4F5;         /* Primary Text */
+  --text-secondary: #A1A1AA;       /* Secondary Text */
   
   /* Status Colors */
-  --success: #26de81;
-  --warning: #FFC300;              /* Highlight */
-  --error: #ff6b6b;
-  --info: #56CFE1;                 /* Accent */
+  --color-error: #EF4444;          /* Alerts/Error */
+  --color-success: #10B981;        /* Success */
+  
+  /* Background Colors */
+  --bg-primary: #121212;           /* App/site background */
+  --bg-secondary: #1E1E1E;         /* UI cards/containers */
+  --bg-tertiary: #2C2C2C;          /* Elevated surfaces */
+  --border-color: #2C2C2C;         /* Table/grid lines */
+  
+  /* Interactive Colors */
+  --accent-blue: #3B82F6;          /* Buttons, links */
+  --accent-blue-hover: #2563EB;    /* Hover state */
+  --accent-red: #EF4444;           /* Error/danger */
+  --accent-red-hover: #DC2626;     /* Error hover */
+  --accent-green: #10B981;         /* Success confirmation */
+  --accent-green-hover: #059669;   /* Success hover */
+  
+  /* Legacy aliases for backward compatibility */
+  --brand-secondary: #3B82F6;
+  --brand-secondary-hover: #2563EB;
+  --brand-neutral: #A1A1AA;
+  --text-muted: #A1A1AA;
+  
+  /* Legacy Status Colors (updated to new scheme) */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #3B82F6;
 }
 
 .app-header {
@@ -408,16 +402,16 @@
   background: var(--accent-blue-hover);
 }
 
-/* AG Grid dark theme customizations */
+/* AG Grid dark theme customizations - Updated Color Scheme */
 .ag-theme-alpine {
-  --ag-header-background-color: var(--brand-primary-dark);
-  --ag-header-foreground-color: var(--brand-secondary);
+  --ag-header-background-color: var(--bg-secondary);
+  --ag-header-foreground-color: var(--accent-blue);
   --ag-border-color: var(--border-color);
-  --ag-row-hover-color: rgba(86, 207, 225, 0.1);
-  --ag-selected-row-background-color: rgba(86, 207, 225, 0.15);
-  --ag-background-color: var(--bg-secondary);
-  --ag-foreground-color: var(--text-secondary);
-  --ag-odd-row-background-color: rgba(13, 27, 42, 0.3);
+  --ag-row-hover-color: rgba(59, 130, 246, 0.1);
+  --ag-selected-row-background-color: rgba(59, 130, 246, 0.15);
+  --ag-background-color: var(--bg-primary);
+  --ag-foreground-color: var(--text-primary);
+  --ag-odd-row-background-color: rgba(30, 30, 30, 0.5);
   --ag-cell-horizontal-border: var(--border-color);
   font-size: 1rem;
 }
@@ -425,11 +419,11 @@
 .ag-theme-alpine .ag-header-cell {
   font-weight: 600;
   font-size: 1.4rem !important;
-  color: var(--brand-secondary) !important;
-  background: var(--brand-primary-dark) !important;
+  color: var(--accent-blue) !important;
+  background: var(--bg-secondary) !important;
   padding: 8px 12px !important;
   line-height: 1.2 !important;
-  border-bottom: 2px solid var(--brand-secondary) !important;
+  border-bottom: 2px solid var(--accent-blue) !important;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   height: auto !important;
