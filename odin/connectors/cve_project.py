@@ -165,7 +165,7 @@ class CVEProjectConnector(DataSourceConnector):
         Extracts the vulnerability description, CVSS score and vector, CWE identifiers and descriptions, 
         categorized references (including patches, vendor advisories, mitigations, and fix versions), 
         affected products, CPE-style identifiers, publication and modification dates, and detailed 
-        product intelligence such as vendors, products, versions, platforms, modules, and repositories.
+        product intelligence such as vendors, products, versions, platforms, and modules.
         """
         containers = data.get("containers", {})
         cna = containers.get("cna", {})
@@ -181,35 +181,54 @@ class CVEProjectConnector(DataSourceConnector):
         # Extract CVSS - Enhanced to handle multiple CVSS versions and all ADP entries
         cvss_score = 0.0
         cvss_vector = ""
+        cvss_version = ""
+        alternative_cvss_scores = []
         
-        # Check CNA first, then all ADP entries
+        # Check CNA first, then all ADP entries for primary CVSS
         all_containers = [cna] + containers.get("adp", [])
+        primary_found = False
         
         for container in all_containers:
-            if not container or cvss_score > 0:
+            if not container:
                 continue
+                
+            # Get container provider for alternative CVSS tracking
+            provider = container.get('providerMetadata', {}).get('shortName', 'unknown')
                 
             # Check metrics array
             for metric in container.get("metrics", []):
-                if cvss_score > 0:
-                    break
-                    
                 # Try all CVSS versions in preference order (v3.1, v3.0, v2.1, v2.0, v2)
                 for cvss_key in ["cvssV3_1", "cvssV3_0", "cvssV2_1", "cvssV2_0", "cvssV2"]:
                     if cvss_key in metric:
                         cvss_data = metric[cvss_key]
-                        cvss_score = float(cvss_data.get("baseScore", 0))
-                        cvss_vector = cvss_data.get("vectorString", "")
-                        logger.debug(f"Found {cvss_key} score {cvss_score} for {cve_id} in {container.get('providerMetadata', {}).get('shortName', 'unknown')}")
+                        score = float(cvss_data.get("baseScore", 0))
+                        vector = cvss_data.get("vectorString", "")
+                        version = cvss_key.replace("cvssV", "").replace("_", ".")
+                        
+                        if not primary_found and score > 0:
+                            # Set as primary CVSS
+                            cvss_score = score
+                            cvss_vector = vector
+                            cvss_version = version
+                            primary_found = True
+                            logger.debug(f"Found primary {cvss_key} score {score} for {cve_id} from {provider}")
+                        elif primary_found and score > 0:
+                            # Add as alternative CVSS
+                            alternative_cvss_scores.append({
+                                "score": score,
+                                "vector": vector,
+                                "version": version,
+                                "provider": provider
+                            })
+                            logger.debug(f"Found alternative {cvss_key} score {score} for {cve_id} from {provider}")
                         break
-                if cvss_score > 0:
-                    break
         
-        # Extract CWE information
+        # Extract CWE information - separate CNA from ADP for alternative tracking
         cwe_ids = []
         cwe_descriptions = []
+        alternative_cwe_mappings = []
         
-        # Check CNA problemTypes for CWE data
+        # Check CNA problemTypes for primary CWE data
         for problem_type in cna.get("problemTypes", []):
             for desc in problem_type.get("descriptions", []):
                 if desc.get("type") == "CWE" and desc.get("cweId"):
@@ -220,14 +239,21 @@ class CVEProjectConnector(DataSourceConnector):
                         if cwe_desc:
                             cwe_descriptions.append(f"{cwe_id}: {cwe_desc}")
         
-        # Also check ADP entries for additional CWE data
+        # Check ADP entries for additional CWE data (alternative mappings)
         for adp in containers.get("adp", []):
+            provider = adp.get('providerMetadata', {}).get('shortName', 'unknown')
             for problem_type in adp.get("problemTypes", []):
                 for desc in problem_type.get("descriptions", []):
                     if desc.get("type") == "CWE" and desc.get("cweId"):
                         cwe_id = desc.get("cweId", "")
                         cwe_desc = desc.get("description", "")
                         if cwe_id and cwe_id not in cwe_ids:
+                            # This is an alternative CWE mapping from ADP
+                            alternative_mapping = f"{cwe_id} ({provider})"
+                            if cwe_desc:
+                                alternative_mapping += f": {cwe_desc}"
+                            alternative_cwe_mappings.append(alternative_mapping)
+                            # Also add to main list for MITRE processing
                             cwe_ids.append(cwe_id)
                             if cwe_desc:
                                 cwe_descriptions.append(f"{cwe_id}: {cwe_desc}")
@@ -238,6 +264,7 @@ class CVEProjectConnector(DataSourceConnector):
         mitigations = []
         vendor_advisories = []
         patches = []
+        reference_tags = []
         
         for ref in cna.get("references", []):
             url = ref.get("url", "")
@@ -249,6 +276,11 @@ class CVEProjectConnector(DataSourceConnector):
             # Categorize references based on tags and URL patterns
             tags = ref.get("tags", [])
             url_lower = url.lower()
+            
+            # Collect all unique reference tags for transparency
+            for tag in tags:
+                if tag and tag not in reference_tags:
+                    reference_tags.append(tag)
             
             # Identify fix/upgrade references
             if any(tag in ["patch", "vendor-advisory", "fix", "upgrade"] for tag in tags):
@@ -279,7 +311,6 @@ class CVEProjectConnector(DataSourceConnector):
         affected_versions = []
         platforms = []
         modules = []
-        repositories = []
         
         for product in cna.get("affected", []):
             vendor = product.get("vendor", "")
@@ -298,11 +329,6 @@ class CVEProjectConnector(DataSourceConnector):
                     vendors.append(vendor)
                 if product_name not in products:
                     products.append(product_name)
-                
-                # Extract repository information
-                repo_url = product.get("repo", "")
-                if repo_url and repo_url not in repositories:
-                    repositories.append(repo_url)
                 
                 # Extract platform information
                 product_platforms = product.get("platforms", [])
@@ -336,10 +362,84 @@ class CVEProjectConnector(DataSourceConnector):
         published = metadata.get("datePublished", "")
         modified = metadata.get("dateUpdated", published)
         
+        # Create enhanced problem type analysis from CWE data
+        enhanced_problem_type = {}
+        if cwe_ids:
+            # Determine primary weakness type from first CWE
+            primary_cwe = cwe_ids[0] if cwe_ids else ""
+            primary_description = cwe_descriptions[0] if cwe_descriptions else ""
+            
+            # Extract vulnerability categories from CWE data
+            vulnerability_categories = []
+            impact_types = []
+            attack_vectors = []
+            
+            # Categorize based on CWE patterns
+            for cwe_id in cwe_ids:
+                if 'CWE-20' in cwe_id:  # Input Validation
+                    vulnerability_categories.append("Input Validation")
+                    attack_vectors.append("Data Injection")
+                elif 'CWE-78' in cwe_id or 'CWE-77' in cwe_id:  # Command Injection
+                    vulnerability_categories.append("Code Injection")
+                    attack_vectors.append("Command Injection")
+                    impact_types.append("Code Execution")
+                elif 'CWE-79' in cwe_id:  # XSS
+                    vulnerability_categories.append("Cross-Site Scripting")
+                    attack_vectors.append("Web Application")
+                    impact_types.append("Information Disclosure")
+                elif 'CWE-89' in cwe_id:  # SQL Injection
+                    vulnerability_categories.append("SQL Injection")
+                    attack_vectors.append("Database")
+                    impact_types.append("Information Disclosure")
+                elif 'CWE-502' in cwe_id:  # Deserialization
+                    vulnerability_categories.append("Unsafe Deserialization")
+                    attack_vectors.append("Data Processing")
+                    impact_types.append("Code Execution")
+                elif 'CWE-22' in cwe_id:  # Path Traversal
+                    vulnerability_categories.append("Path Traversal")
+                    attack_vectors.append("File System")
+                    impact_types.append("Information Disclosure")
+                elif 'CWE-200' in cwe_id:  # Information Exposure
+                    vulnerability_categories.append("Information Disclosure")
+                    impact_types.append("Information Disclosure")
+                elif 'CWE-787' in cwe_id or 'CWE-119' in cwe_id:  # Buffer Overflow
+                    vulnerability_categories.append("Memory Corruption")
+                    attack_vectors.append("Memory Management")
+                    impact_types.append("Code Execution")
+                elif 'CWE-287' in cwe_id:  # Authentication
+                    vulnerability_categories.append("Authentication Bypass")
+                    attack_vectors.append("Authentication")
+                    impact_types.append("Privilege Escalation")
+                elif 'CWE-400' in cwe_id:  # Resource Consumption
+                    vulnerability_categories.append("Denial of Service")
+                    attack_vectors.append("Resource Exhaustion")
+                    impact_types.append("Availability Impact")
+            
+            # Remove duplicates
+            vulnerability_categories = list(set(vulnerability_categories))
+            impact_types = list(set(impact_types))
+            attack_vectors = list(set(attack_vectors))
+            
+            enhanced_problem_type = {
+                "type": primary_cwe,
+                "description": primary_description,
+                "cwe_mapping": cwe_ids,
+                "primary_weakness": primary_cwe,
+                "secondary_weaknesses": cwe_ids[1:] if len(cwe_ids) > 1 else [],
+                "vulnerability_categories": vulnerability_categories,
+                "impact_types": impact_types,
+                "attack_vectors": attack_vectors,
+                "enhanced_cwe_details": cwe_descriptions
+            }
+
         result = {
             "description": description,
             "cvss_score": cvss_score,
             "cvss_vector": cvss_vector,
+            "cvss_version": cvss_version,
+            "alternative_cvss_scores": alternative_cvss_scores,
+            "reference_tags": reference_tags,
+            "alternative_cwe_mappings": alternative_cwe_mappings,
             "cwe_ids": cwe_ids,
             "cwe_descriptions": cwe_descriptions,
             "references": references,
@@ -357,10 +457,69 @@ class CVEProjectConnector(DataSourceConnector):
                 "products": products,
                 "affected_versions": affected_versions,
                 "platforms": platforms,
-                "modules": modules,
-                "repositories": repositories
-            }
+                "modules": modules
+            },
+            # Enhanced problem type analysis
+            "enhanced_problem_type": enhanced_problem_type
         }
+        
+        # Parse temporal CVSS metrics from vector if present
+        temporal_cvss = self._parse_temporal_cvss(cvss_vector)
+        if any(temporal_cvss.values()):
+            result["temporal_cvss"] = temporal_cvss
         
         logger.debug(f"{cve_id} parsed: CVSS={cvss_score}, desc_length={len(description)}, refs={len(references)}")
         return result
+    
+    def _parse_temporal_cvss(self, vector: str) -> Dict[str, str]:
+        """Extract temporal CVSS metrics from vector string.
+        
+        Temporal metrics are embedded in CVSS vectors like:
+        E:F (Exploit Code Maturity: Functional)
+        RL:O (Remediation Level: Official Fix)  
+        RC:C (Report Confidence: Confirmed)
+        """
+        temporal_data = {
+            "exploit_code_maturity": "",
+            "remediation_level": "",
+            "report_confidence": ""
+        }
+        
+        if not vector:
+            return temporal_data
+            
+        import re
+        
+        # Exploit Code Maturity (E:)
+        e_match = re.search(r'/E:([A-Z])', vector)
+        if e_match:
+            e_value = e_match.group(1)
+            temporal_data["exploit_code_maturity"] = {
+                'U': 'Unproven',
+                'P': 'Proof-of-Concept', 
+                'F': 'Functional',
+                'H': 'High'
+            }.get(e_value, e_value)
+        
+        # Remediation Level (RL:)
+        rl_match = re.search(r'/RL:([A-Z])', vector)
+        if rl_match:
+            rl_value = rl_match.group(1)
+            temporal_data["remediation_level"] = {
+                'O': 'Official Fix',
+                'T': 'Temporary Fix',
+                'W': 'Workaround',
+                'U': 'Unavailable'
+            }.get(rl_value, rl_value)
+        
+        # Report Confidence (RC:)
+        rc_match = re.search(r'/RC:([A-Z])', vector)
+        if rc_match:
+            rc_value = rc_match.group(1)
+            temporal_data["report_confidence"] = {
+                'U': 'Unknown',
+                'R': 'Reasonable',
+                'C': 'Confirmed'
+            }.get(rc_value, rc_value)
+        
+        return temporal_data

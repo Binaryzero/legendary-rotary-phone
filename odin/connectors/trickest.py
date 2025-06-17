@@ -86,11 +86,15 @@ class TrickestConnector(DataSourceConnector):
             elif "packetstormsecurity" in url:
                 exploit_type = "packetstorm"
             
+            # Enhanced exploit verification based on URL characteristics
+            verified = self._assess_exploit_verification(url, title)
+            
             exploits.append({
                 "url": url,
                 "source": "trickest",
                 "type": exploit_type,
-                "title": title
+                "title": title,
+                "verified": verified
             })
         
         # Enhanced parsing: Extract plain URLs from content
@@ -126,13 +130,51 @@ class TrickestConnector(DataSourceConnector):
                     exploit_type = "packetstorm"
                     title = "Packet Storm"
                 
+                # Enhanced exploit verification
+                verified = self._assess_exploit_verification(url, title)
+                
                 exploits.append({
                     "url": url,
                     "source": "trickest",
                     "type": exploit_type,
-                    "title": title
+                    "title": title,
+                    "verified": verified
                 })
                 existing_urls.add(url)
         
         logger.debug(f"TrickestConnector found {len(exploits)} exploit URLs for {cve_id}")
         return {"exploits": exploits}
+    
+    def _assess_exploit_verification(self, url: str, title: str) -> bool:
+        """Assess whether an exploit appears to be verified/working based on URL and title characteristics."""
+        url_lower = url.lower()
+        title_lower = title.lower() if title else ""
+        
+        # Higher confidence verification indicators
+        high_confidence_indicators = [
+            "exploit-db.com",  # ExploitDB typically contains verified exploits
+            "metasploit.com",  # Metasploit modules are typically working
+            "nuclei-templates"  # Nuclei templates are tested
+        ]
+        
+        # Working/verified keywords in titles
+        verified_keywords = [
+            "working", "verified", "tested", "functional", 
+            "metasploit", "nuclei", "exploit", "rce"
+        ]
+        
+        # Unverified/PoC keywords
+        poc_keywords = [
+            "poc", "proof", "concept", "demo", "example", "draft"
+        ]
+        
+        # Check high confidence sources
+        if any(indicator in url_lower for indicator in high_confidence_indicators):
+            return True
+            
+        # Check title for verification indicators
+        verified_score = sum(1 for keyword in verified_keywords if keyword in title_lower)
+        poc_score = sum(1 for keyword in poc_keywords if keyword in title_lower)
+        
+        # Return True if more verified indicators than PoC indicators
+        return verified_score > poc_score
