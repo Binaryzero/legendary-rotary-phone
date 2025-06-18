@@ -8,9 +8,9 @@ from datetime import datetime
 from typing import Dict, Any
 
 # Core version information
-__version__ = "1.0.2"
-__build__ = "20250618.2"  # YYYYMMDD.build_number
-__git_commit__ = "0f0446e2c04a437da32506eee1017ea6cac55569"  # Updated by CI/CD
+__version__ = "1.0.3"
+__build__ = "20250618.3"  # YYYYMMDD.build_number
+__git_commit__ = "ce3b98d589dd6a6934c0f5a8344896d0844aa995"  # Updated by CI/CD
 __release_date__ = "2025-06-18"
 __release_name__ = "Foundation"
 
@@ -57,7 +57,14 @@ def check_compatibility(required_version: str) -> bool:
 # Version history for reference
 VERSION_HISTORY = [
     
+    
     {
+        "version": "1.0.3",
+        "build": "20250618.3",
+        "date": "2025-06-18",
+        "name": "TBD",
+        "changes": ['Fix critical export format gaps and documentation inaccuracies']
+    },{
         "version": "1.0.2",
         "build": "20250618.2",
         "date": "2025-06-18",
