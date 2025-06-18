@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Dict, Any
 
 # Core version information
-__version__ = "1.0.0"
-__build__ = "20250617.2"  # YYYYMMDD.build_number
-__git_commit__ = "34c43b2e12fc536926b10a83ccee6ba43dad5dbe"  # Updated by CI/CD
-__release_date__ = "2025-06-17"
+__version__ = "1.0.1"
+__build__ = "20250618.1"  # YYYYMMDD.build_number
+__git_commit__ = "8e764301f49bb7ef6af78420b56e4c70f3847c0d"  # Updated by CI/CD
+__release_date__ = "2025-06-18"
 __release_name__ = "Foundation"
 
 # Feature compatibility information
@@ -57,6 +57,12 @@ def check_compatibility(required_version: str) -> bool:
 # Version history for reference
 VERSION_HISTORY = [
     {
+        "version": "1.0.1",
+        "build": "20250618.1",
+        "date": "2025-06-18",
+        "name": "TBD",
+        "changes": ['Dev 2 odin']
+    },{
         "version": "1.0.0",
         "build": "20250617.2",
         "date": "2025-06-17",
