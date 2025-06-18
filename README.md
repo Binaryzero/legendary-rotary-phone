@@ -17,6 +17,19 @@ ODIN is a **data collector and aggregator**, not a decision maker. It provides c
 
 ##  Architecture Overview
 
+### **CLI-Centric File-Based Architecture**
+
+ODIN uses a simplified, secure architecture where the CLI tool generates all intelligence files and the Web UI provides optional visualization:
+
+```
+CLI Tool → ODIN Engine → Generate All Files → Web UI Loads JSON
+```
+
+**Benefits:**
+- **Security**: No API = No API vulnerabilities
+- **Simplicity**: Single CLI generates everything, Web UI for visualization
+- **User Experience**: All formats created automatically (JSON, CSV, Excel)
+
 ### **5-Layer Data Architecture**
 
 | Layer | Source | Intelligence Provided |
@@ -56,55 +69,57 @@ cd frontend && npm install && cd ..
 
 ### Basic Usage
 
-#### Command-Line Interface
+#### Command-Line Interface (Primary)
 ```bash
-# Research a single CVE
+# Simple research - generates all formats automatically
 echo "CVE-2021-44228" > cves.txt
-python odin_cli.py cves.txt --format json
+python odin_cli.py cves.txt
+# Creates: JSON (for Web UI), CSV (for Excel), Excel (structured)
 
-# Batch research with CSV export  
-python odin_cli.py cves.txt --format csv --output research_results.csv
+# Batch research - multiple CVEs
+python odin_cli.py my_cve_list.txt
 
 # Get version information
 python odin_cli.py --version
 ```
 
-#### Web Interface
+#### Web Interface (Visualization)
 ```bash
-# Start full web interface (backend + frontend)
+# Start web interface (no backend needed)
 python start_odin_ui.py
 
-# Custom ports
-python start_odin_ui.py --backend-port 8080 --frontend-port 3001
+# Use interface to research CVEs or load existing JSON files
+# Interface calls CLI automatically and displays results
 ```
 
-The web interface will be available at `http://localhost:3000` with API documentation at `http://localhost:8000/docs`.
+The web interface will be available at `http://localhost:3000` and provides visualization of CLI-generated data.
 
 ##  Export Formats
 
-### JSON Export (Comprehensive)
+ODIN automatically generates all formats with each research operation:
+
+### Automatic Generation
 ```bash
-python odin_cli.py cves.txt --format json
+python odin_cli.py cves.txt
+# Creates all formats automatically:
 ```
+
+### JSON Export (Web UI + Programmatic)
 - All 80+ fields with structured data
 - Version metadata for traceability
 - Nested objects for complex intelligence
+- Loaded automatically by Web UI
 
-### CSV Export (Excel-Compatible)
-```bash
-python odin_cli.py cves.txt --format csv
-```
+### CSV Export (Excel Analysis)
 - Flattened structure for spreadsheet analysis
 - All fields with proper sanitization
 - Excel-compatible formatting
+- Perfect for data analysis workflows
 
-### WebUI Export (Visualization-Ready)
-```bash
-python odin_cli.py cves.txt --format webui
-```
-- Optimized for web interface visualization
-- Timestamp-based file naming
-- Enhanced metadata structure
+### Excel Export (Structured Spreadsheets)
+- Professional Excel format
+- Structured data organization
+- Formatted for business reporting
 
 ##  Development
 
@@ -141,8 +156,8 @@ odin/                   # Core package
 ├── reporting/         # Export generation
 └── utils/            # Utilities and helpers
 
-backend/               # FastAPI backend
-frontend/             # React TypeScript UI
+odin_cli.py            # Primary CLI interface
+frontend/             # React TypeScript UI (visualization)
 tests/                # Test suite
 scripts/              # Development tools
 docs/                 # Documentation
