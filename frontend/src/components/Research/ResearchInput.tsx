@@ -84,7 +84,7 @@ const ResearchInput: React.FC<ResearchInputProps> = memo(({
         </div>
         
         <div className="input-help">
-          <span>💡 Tip: Use Ctrl+Enter to research quickly</span>
+          <span> Tip: Use Ctrl+Enter to research quickly</span>
         </div>
       </div>
 
@@ -131,9 +131,9 @@ const ResearchInput: React.FC<ResearchInputProps> = memo(({
         
         <div className="upload-help">
           {uploadType === 'cve-list' ? (
-            <span>📁 Upload a text/CSV file with CVE IDs to research them automatically</span>
+            <span> Upload a text/CSV file with CVE IDs to research them automatically</span>
           ) : (
-            <span>📊 Upload a JSON file with existing CVE data to load directly</span>
+            <span> Upload a JSON file with existing CVE data to load directly</span>
           )}
         </div>
       </div>

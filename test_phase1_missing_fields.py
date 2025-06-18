@@ -43,7 +43,7 @@ async def test_phase1_missing_fields():
         research_data.cvss_bt_severity  # Should have CVSS-BT severity
     ])
     
-    print(f"\n🎯 Phase 1 Status: {'SUCCESS' if phase1_working else 'NEEDS WORK'}")
+    print(f"\n Phase 1 Status: {'SUCCESS' if phase1_working else 'NEEDS WORK'}")
     print(f"New fields populated: {3 if phase1_working else 'FAILED'}/3")
 
 if __name__ == "__main__":

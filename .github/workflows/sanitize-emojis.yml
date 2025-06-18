@@ -1,4 +1,6 @@
 name: Sanitize Emojis
+permissions:
+  contents: write
 
 on:
   push:
@@ -13,7 +15,10 @@ jobs:
   sanitize:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,5 +38,5 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add .
             git commit -m "chore: auto-remove emojis from content [bot]"
-            git push
+            git push origin HEAD:${{ github.head_ref || github.ref }}
           fi

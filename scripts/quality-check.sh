@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🎯 CVE Research Toolkit - Complete Quality Check"
+echo " CVE Research Toolkit - Complete Quality Check"
 echo "==============================================="
 
 # Colors for output
@@ -21,14 +21,14 @@ run_check() {
     local name="$1"
     local command="$2"
     
-    echo -e "\n${BLUE}🔍 Running $name...${NC}"
+    echo -e "\n${BLUE} Running $name...${NC}"
     echo "----------------------------------------"
     
     if eval "$command"; then
-        echo -e "${GREEN}✅ $name passed!${NC}"
+        echo -e "${GREEN} $name passed!${NC}"
         ((PASSED++))
     else
-        echo -e "${RED}❌ $name failed!${NC}"
+        echo -e "${RED} $name failed!${NC}"
         ((FAILED++))
     fi
 }
@@ -57,23 +57,23 @@ run_check "Documentation Style" "pydocstyle cve_research_toolkit_fixed.py --conv
 # Summary
 echo ""
 echo "================================================"
-echo -e "${BLUE}📊 Quality Check Summary${NC}"
+echo -e "${BLUE} Quality Check Summary${NC}"
 echo "================================================"
-echo -e "✅ Passed: ${GREEN}$PASSED${NC}"
-echo -e "❌ Failed: ${RED}$FAILED${NC}"
+echo -e " Passed: ${GREEN}$PASSED${NC}"
+echo -e " Failed: ${RED}$FAILED${NC}"
 
 if [ $FAILED -eq 0 ]; then
     echo ""
-    echo -e "${GREEN}🎉 All quality checks passed!${NC}"
-    echo -e "${GREEN}✨ Code is ready for production!${NC}"
+    echo -e "${GREEN} All quality checks passed!${NC}"
+    echo -e "${GREEN} Code is ready for production!${NC}"
     exit 0
 else
     echo ""
-    echo -e "${RED}⚠️  Some quality checks failed.${NC}"
-    echo -e "${YELLOW}📝 Please fix the issues above before committing.${NC}"
+    echo -e "${RED}  Some quality checks failed.${NC}"
+    echo -e "${YELLOW} Please fix the issues above before committing.${NC}"
     
     echo ""
-    echo "🔧 Quick fixes:"
+    echo " Quick fixes:"
     echo "  - Code formatting: make format"
     echo "  - Linting issues: Check flake8 output above"
     echo "  - Type issues: Check mypy output above"
