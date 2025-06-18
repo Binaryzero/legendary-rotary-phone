@@ -9,7 +9,9 @@ research intelligence across five layers:
 5. Raw Intelligence (Patrowl/PatrowlHearsData)
 """
 
-__version__ = "1.0.0"
+# Import version information from central version module
+from .version import __version__, __build__, __release_name__, get_version_string, get_version_info
+
 __author__ = "CVE Research Team"
 
 from .core.engine import VulnerabilityResearchEngine
@@ -19,7 +21,12 @@ from . import exceptions
 
 __all__ = [
     "VulnerabilityResearchEngine",
-    "ResearchData",
+    "ResearchData", 
     "ResearchReportGenerator",
-    "exceptions"
+    "exceptions",
+    "__version__",
+    "__build__",
+    "__release_name__",
+    "get_version_string",
+    "get_version_info"
 ]

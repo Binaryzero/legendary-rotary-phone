@@ -17,15 +17,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# Import the research toolkit
+# Add parent directory to path to find odin package
 import sys
 import os
 from pathlib import Path
 
-# Add parent directory to path to find odin package
 backend_dir = Path(__file__).parent
 parent_dir = backend_dir.parent
 sys.path.insert(0, str(parent_dir))
+
+# Import the research toolkit
+from odin.version import get_version_info, get_version_string
 
 try:
     from odin.core.engine import VulnerabilityResearchEngine
@@ -122,6 +124,9 @@ async def research_cves(request: CVEResearchRequest):
                 "cvss_score": rd.cvss_score,
                 "cvss_vector": rd.cvss_vector,
                 "severity": rd.severity,
+                "cvss_version": rd.cvss_version,
+                "cvss_bt_score": rd.cvss_bt_score,
+                "cvss_bt_severity": rd.cvss_bt_severity,
                 "published_date": rd.published_date.isoformat() if rd.published_date else None,
                 "last_modified": rd.last_modified.isoformat() if rd.last_modified else None,
                 "references": rd.references,
@@ -130,32 +135,35 @@ async def research_cves(request: CVEResearchRequest):
                     "capec_ids": rd.weakness.capec_ids,
                     "attack_techniques": rd.weakness.attack_techniques,
                     "attack_tactics": rd.weakness.attack_tactics,
-                    "kill_chain_phases": rd.weakness.kill_chain_phases
+                    "kill_chain_phases": rd.weakness.kill_chain_phases,
+                    "cwe_details": rd.weakness.cwe_details,
+                    "capec_details": rd.weakness.capec_details,
+                    "technique_details": rd.weakness.technique_details,
+                    "tactic_details": rd.weakness.tactic_details,
+                    "enhanced_technique_descriptions": rd.weakness.enhanced_technique_descriptions,
+                    "enhanced_tactic_descriptions": rd.weakness.enhanced_tactic_descriptions,
+                    "enhanced_capec_descriptions": rd.weakness.enhanced_capec_descriptions,
+                    "alternative_cwe_mappings": rd.weakness.alternative_cwe_mappings
                 },
                 "threat": {
                     "in_kev": rd.threat.in_kev,
                     "vulncheck_kev": rd.threat.vulncheck_kev,
                     "epss_score": rd.threat.epss_score,
-                    "epss_percentile": rd.threat.epss_percentile,
-                    "vedas_score": rd.threat.vedas_score,
-                    "vedas_percentile": rd.threat.vedas_percentile,
-                    "vedas_score_change": rd.threat.vedas_score_change,
-                    "vedas_detail_url": rd.threat.vedas_detail_url,
-                    "vedas_date": rd.threat.vedas_date,
-                    "temporal_score": rd.threat.temporal_score,
-                    "exploit_code_maturity": rd.threat.exploit_code_maturity,
-                    "remediation_level": rd.threat.remediation_level,
-                    "report_confidence": rd.threat.report_confidence,
                     "actively_exploited": rd.threat.actively_exploited,
                     "has_metasploit": rd.threat.has_metasploit,
                     "has_nuclei": rd.threat.has_nuclei,
+                    "has_exploitdb": rd.threat.has_exploitdb,
+                    "has_poc_github": rd.threat.has_poc_github,
                     "ransomware_campaign": rd.threat.ransomware_campaign,
                     "kev_vulnerability_name": rd.threat.kev_vulnerability_name,
                     "kev_short_description": rd.threat.kev_short_description,
                     "kev_vendor_project": rd.threat.kev_vendor_project,
-                    "kev_product": rd.threat.kev_product
+                    "kev_product": rd.threat.kev_product,
+                    "kev_required_action": rd.threat.kev_required_action,
+                    "kev_known_ransomware": rd.threat.kev_known_ransomware,
+                    "kev_notes": rd.threat.kev_notes
                 },
-                "exploits": [{"url": exp.url, "source": exp.source, "type": exp.type} for exp in rd.exploits],
+                "exploits": [{"url": exp.url, "source": exp.source, "type": exp.type, "verified": exp.verified, "title": exp.title} for exp in rd.exploits],
                 "exploit_maturity": rd.exploit_maturity,
                 "cpe_affected": rd.cpe_affected,
                 "vendor_advisories": rd.vendor_advisories,
@@ -178,9 +186,12 @@ async def research_cves(request: CVEResearchRequest):
                     "products": rd.product_intelligence.products,
                     "affected_versions": rd.product_intelligence.affected_versions,
                     "platforms": rd.product_intelligence.platforms,
-                    "modules": rd.product_intelligence.modules,
-                    "repositories": rd.product_intelligence.repositories
+                    "modules": rd.product_intelligence.modules
                 },
+                "alternative_cvss_scores": rd.alternative_cvss_scores,
+                "reference_tags": rd.reference_tags,
+                "mitigations": rd.mitigations,
+                "fix_versions": rd.fix_versions,
                 "last_enriched": rd.last_enriched.isoformat() if rd.last_enriched else None
             }
             new_data.append(result)
@@ -329,6 +340,11 @@ async def get_summary():
         "kev_count": kev_count,
         "exploit_count": exploit_count
     }
+
+@app.get("/api/version")
+async def get_version():
+    """Get ODIN version information."""
+    return get_version_info()
 
 @app.get("/api/analytics/severity")
 async def get_severity_analytics():

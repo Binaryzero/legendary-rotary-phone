@@ -80,11 +80,6 @@ class CVSSBTConnector(DataSourceConnector):
                                 'cvss_bt_score': safe_float(row.get('cvss-bt_score')),
                                 'cvss_bt_severity': row.get('cvss-bt_severity', ''),
                                 'cvss_bt_vector': row.get('cvss-bt_vector', ''),
-                                # Temporal CVSS metrics
-                                'temporal_score': safe_float(row.get('temporal_score')),
-                                'exploit_code_maturity': row.get('exploit_code_maturity', ''),
-                                'remediation_level': row.get('remediation_level', ''),
-                                'report_confidence': row.get('report_confidence', ''),
                                 'assigner': row.get('assigner', ''),
                                 'published_date': row.get('published_date', ''),
                                 'epss': safe_float(row.get('epss')),
@@ -120,11 +115,65 @@ class CVSSBTConnector(DataSourceConnector):
         
         return {}
     
+    def _parse_temporal_cvss(self, vector: str) -> Dict[str, Any]:
+        """Extract temporal CVSS metrics from vector string.
+        
+        Temporal metrics are embedded in CVSS vectors like:
+        E:P (Exploit Code Maturity: Proof-of-concept)
+        RL:O (Remediation Level: Official Fix)
+        RC:C (Report Confidence: Confirmed)
+        """
+        temporal_data = {
+            "exploit_code_maturity": "",
+            "remediation_level": "",
+            "report_confidence": ""
+        }
+        
+        if not vector:
+            return temporal_data
+            
+        # Extract temporal metrics from vector
+        import re
+        
+        # Exploit Code Maturity (E:)
+        e_match = re.search(r'/E:([A-Z])', vector)
+        if e_match:
+            e_value = e_match.group(1)
+            temporal_data["exploit_code_maturity"] = {
+                'U': 'Unproven',
+                'P': 'Proof-of-Concept', 
+                'F': 'Functional',
+                'H': 'High'
+            }.get(e_value, e_value)
+        
+        # Remediation Level (RL:)
+        rl_match = re.search(r'/RL:([A-Z])', vector)
+        if rl_match:
+            rl_value = rl_match.group(1)
+            temporal_data["remediation_level"] = {
+                'O': 'Official Fix',
+                'T': 'Temporary Fix',
+                'W': 'Workaround',
+                'U': 'Unavailable'
+            }.get(rl_value, rl_value)
+        
+        # Report Confidence (RC:)
+        rc_match = re.search(r'/RC:([A-Z])', vector)
+        if rc_match:
+            rc_value = rc_match.group(1)
+            temporal_data["report_confidence"] = {
+                'U': 'Unknown',
+                'R': 'Reasonable',
+                'C': 'Confirmed'
+            }.get(rc_value, rc_value)
+        
+        return temporal_data
+
     def parse(self, cve_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Parses CVSS-BT enrichment data for a given CVE.
         
-        Extracts base and CVSS-BT scores, vectors, severity, assigner, publication date, and threat context including KEV status, EPSS score, temporal CVSS metrics, and exploit availability indicators.
+        Extracts base and CVSS-BT scores, vectors, severity, assigner, publication date, temporal CVSS metrics from vectors, and threat context including KEV status, EPSS score, and exploit availability indicators.
         
         Returns:
             A dictionary containing parsed CVSS-BT and threat context data for the specified CVE.
@@ -132,26 +181,37 @@ class CVSSBTConnector(DataSourceConnector):
         if not data:
             return {}
         
-        return {
+        # Extract temporal CVSS from base vector (most common location)
+        base_vector = data.get("base_vector", "")
+        cvss_bt_vector = data.get("cvss_bt_vector", "")
+        
+        # Try to extract temporal metrics from either vector
+        temporal_data = self._parse_temporal_cvss(base_vector)
+        if not any(temporal_data.values()):
+            temporal_data = self._parse_temporal_cvss(cvss_bt_vector)
+        
+        result = {
             "cvss_score": data.get("base_score", 0.0),
-            "cvss_vector": data.get("base_vector", ""),
+            "cvss_vector": base_vector,
             "cvss_version": data.get("cvss_version", ""),
             "cvss_bt_score": data.get("cvss_bt_score", 0.0),
             "cvss_bt_severity": data.get("cvss_bt_severity", ""),
-            "cvss_bt_vector": data.get("cvss_bt_vector", ""),
+            "cvss_bt_vector": cvss_bt_vector,
             "assigner": data.get("assigner", ""),
             "published_date": data.get("published_date", ""),
             "threat": {
                 "in_kev": data.get("cisa_kev", False),
                 "vulncheck_kev": data.get("vulncheck_kev", False),
                 "epss_score": data.get("epss", 0.0),
-                "temporal_score": data.get("temporal_score"),
-                "exploit_code_maturity": data.get("exploit_code_maturity", ""),
-                "remediation_level": data.get("remediation_level", ""),
-                "report_confidence": data.get("report_confidence", ""),
                 "has_metasploit": data.get("metasploit", False),
                 "has_exploitdb": data.get("exploitdb", False),
                 "has_nuclei": data.get("nuclei", False),
-                "has_poc_github": data.get("poc_github", False)
+                "has_poc_github": data.get("poc_github", False),
+                # Add temporal CVSS fields
+                "exploit_code_maturity": temporal_data["exploit_code_maturity"],
+                "remediation_level": temporal_data["remediation_level"], 
+                "report_confidence": temporal_data["report_confidence"]
             }
         }
+        
+        return result

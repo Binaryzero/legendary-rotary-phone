@@ -294,9 +294,6 @@ class VulnerabilityResearchEngine:
             # Map enhanced problem type
             enhanced_problem = foundational.get("enhanced_problem_type", {})
             if enhanced_problem:
-                research_data.enhanced_problem_type.type = enhanced_problem.get("type", "")
-                research_data.enhanced_problem_type.description = enhanced_problem.get("description", "")
-                research_data.enhanced_problem_type.cwe_mapping = enhanced_problem.get("cwe_mapping", [])
                 research_data.enhanced_problem_type.primary_weakness = enhanced_problem.get("primary_weakness", "")
                 research_data.enhanced_problem_type.secondary_weaknesses = enhanced_problem.get("secondary_weaknesses", [])
                 research_data.enhanced_problem_type.vulnerability_categories = enhanced_problem.get("vulnerability_categories", [])
@@ -304,12 +301,7 @@ class VulnerabilityResearchEngine:
                 research_data.enhanced_problem_type.attack_vectors = enhanced_problem.get("attack_vectors", [])
                 research_data.enhanced_problem_type.enhanced_cwe_details = enhanced_problem.get("enhanced_cwe_details", [])
             
-            # Map control mappings
-            control_map = foundational.get("control_mappings", {})
-            if control_map:
-                research_data.control_mappings.nist_controls = control_map.get("nist_controls", [])
-                research_data.control_mappings.recommended_controls = control_map.get("recommended_controls", [])
-                research_data.control_mappings.security_categories = control_map.get("security_categories", [])
+            # Note: Control mappings are populated later from ATT&CK techniques in NIST mapper (lines 430-439)
         
         # Add enhanced data from Patrowl (Layer 5 - Raw Intelligence) as fallback
         if raw_intelligence and not research_data.cpe_affected:
