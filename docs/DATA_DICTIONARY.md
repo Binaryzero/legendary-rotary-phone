@@ -8,7 +8,7 @@ ODIN implements a systematic vulnerability intelligence aggregation workflow thr
 
 ---
 
-## **🏗️ Data Layer Architecture**
+## ** Data Layer Architecture**
 
 ODIN's **5-layer data architecture** aggregates intelligence from authoritative sources:
 
@@ -24,9 +24,9 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 
 ---
 
-## **📊 Complete Field Reference**
+## ** Complete Field Reference**
 
-### **🔍 Core CVE Intelligence (12 fields)**
+### ** Core CVE Intelligence (12 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -43,7 +43,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **reference_count** | Integer | Total number of references | Layer 1 |
 | **alternative_cvss_scores** | Array | Additional CVSS scores from ADP entries | Layer 1 |
 
-### **⚙️ CVSS Component Breakdown (8 fields)**
+### ** CVSS Component Breakdown (8 fields)**
 
 | Field Name | Type | Description | Values |
 |------------|------|-------------|--------|
@@ -56,7 +56,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **integrity_impact** | String | CVSS Integrity Impact | None/Low/High |
 | **availability_impact** | String | CVSS Availability Impact | None/Low/High |
 
-### **🎯 Exploit Intelligence (8 fields)**
+### ** Exploit Intelligence (8 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -69,7 +69,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **has_metasploit** | Boolean | Metasploit module available | Layer 4 |
 | **has_nuclei** | Boolean | Nuclei template available | Layer 4 |
 
-### **🧠 Enhanced Problem Classification (6 fields)**
+### ** Enhanced Problem Classification (6 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -80,7 +80,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **attack_vectors** | Array | Possible attack vectors | Layer 3 |
 | **enhanced_cwe_details** | Object | Detailed CWE mapping and context | Layer 3 |
 
-### **🏢 Product Intelligence (6 fields)**
+### ** Product Intelligence (6 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -91,7 +91,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **modules** | Array | Specific software modules/components | Layer 1 |
 | **affected** | String | Comma-separated affected products summary | Layer 1 |
 
-### **🔗 Reference Intelligence (4 fields)**
+### ** Reference Intelligence (4 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -100,7 +100,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **fix_versions** | Array | URLs for patches and fixes | Layer 1 |
 | **vendor_advisories** | Array | Vendor security advisory URLs | Layer 1 |
 
-### **⚡ Temporal CVSS Metrics (4 fields)**
+### ** Temporal CVSS Metrics (4 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -109,7 +109,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **report_confidence** | String | CVSS Temporal: Confidence level | Layer 4 |
 | **cvss_bt_score** | Float | Enhanced CVSS score with temporal factors | Layer 4 |
 
-### **🚨 Threat Context Intelligence (12 fields)**
+### ** Threat Context Intelligence (12 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -126,7 +126,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **has_poc_github** | Boolean | GitHub proof-of-concept available | Layer 4 |
 | **cvss_bt_severity** | String | Enhanced severity classification | Layer 4 |
 
-### **🛡️ Control Mappings (3 fields)**
+### ** Control Mappings (3 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -134,7 +134,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **control_categories** | Array | Categories of applicable NIST controls | Layer 3 |
 | **top_controls** | Array | Most relevant NIST 800-53 control IDs | Layer 3 |
 
-### **🎖️ MITRE Enhancement (6 fields)**
+### ** MITRE Enhancement (6 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -145,7 +145,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 | **enhanced_attack_tactics** | Array | Enhanced tactic descriptions with purpose | Layer 3 |
 | **enhanced_capec_descriptions** | Array | Detailed attack pattern explanations | Layer 3 |
 
-### **📋 Additional Intelligence (7 fields)**
+### ** Additional Intelligence (7 fields)**
 
 | Field Name | Type | Description | Source Layer |
 |------------|------|-------------|--------------|
@@ -159,7 +159,7 @@ ODIN's **5-layer data architecture** aggregates intelligence from authoritative 
 
 ---
 
-## **🔄 Data Processing Pipeline**
+## ** Data Processing Pipeline**
 
 ### **Layer 1: Foundational Record Processing**
 ```
@@ -208,7 +208,7 @@ Patrowl/PatrowlHearsData → Multi-format Parser → Validation + Additional Fie
 
 ---
 
-## **📈 Field Coverage Statistics**
+## ** Field Coverage Statistics**
 
 ### **Implementation Status**
 - **Total Fields**: 80 (100% implemented)
@@ -227,7 +227,7 @@ Patrowl/PatrowlHearsData → Multi-format Parser → Validation + Additional Fie
 
 ---
 
-## **🎯 Export Format Compatibility**
+## ** Export Format Compatibility**
 
 ### **JSON Export (Complete Intelligence)**
 - **All 80 fields** with full structure
@@ -249,7 +249,7 @@ Patrowl/PatrowlHearsData → Multi-format Parser → Validation + Additional Fie
 
 ---
 
-## **🔍 Research Value by Field Category**
+## ** Research Value by Field Category**
 
 ### **High-Impact Intelligence Fields**
 1. **Core CVE Data**: Essential for any vulnerability analysis
@@ -270,7 +270,7 @@ Patrowl/PatrowlHearsData → Multi-format Parser → Validation + Additional Fie
 
 ---
 
-## **📊 Data Quality Standards**
+## ** Data Quality Standards**
 
 ### **Source Verification**
 - All data sources verified for reliability and maintenance
