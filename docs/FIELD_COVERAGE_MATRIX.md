@@ -140,7 +140,7 @@ ODIN has achieved **verified complete field implementation** with all **80+ stru
 | **CVEProject/cvelistV5** |  **Complete** | 35+ fields | Institutional |
 | **trickest/cve** |  **Complete** | 8+ fields | Community (Verified) |
 | **mitre/cti** |  **Complete** | 18+ fields | Institutional |
-| **CISA KEV + EPSS** |  **Complete** | 12+ fields | Institutional |
+| **t0sche/cvss-bt** |  **Complete** | 12+ fields | Institutional |
 | **Patrowl/PatrowlHearsData** |  **Complete** | 7+ fields | Institutional |
 
 ### **Export Format Verification (UPDATED)**
@@ -215,7 +215,7 @@ ODIN has achieved **verified complete field implementation** with all **80+ stru
 ├──  CVEProject connector extracts 35+ fields correctly
 ├──  Trickest connector extracts 8+ exploit fields
 ├──  MITRE connector extracts 18+ classification fields
-├──  KEV/EPSS connector extracts 12+ threat context fields
+├──  CVSS-BT connector extracts 12+ threat context fields
 ├──  Patrowl connector extracts 7+ validation fields
 ├──  Engine properly maps all 80+ fields to data models
 ├──  API exposes all fields through FastAPI schema
