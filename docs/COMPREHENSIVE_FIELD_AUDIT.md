@@ -35,7 +35,7 @@ This audit reveals **significant gaps** between documented field coverage and ac
 12. `exploit_maturity` (String)
 13. `last_enriched` (Optional[datetime])
 
-### **ExploitReference Fields (5 fields per exploit)**
+### **ExploitReference Fields (6 fields per exploit)**
 1. `url` (String)
 2. `source` (String)
 3. `type` (String)
