@@ -90,8 +90,13 @@ def test_export_functionality() -> None:
     generator.export_research_data(test_data, "json", output_dir / "test.json")
 
     with open(output_dir / "test.json") as f:
-        json_data = json.load(f)
-    assert len(json_data) == 2 and json_data[0]["cve_id"] == "CVE-2021-44228"
+        json_export = json.load(f)
+    
+    # Check new JSON export format with metadata
+    assert "metadata" in json_export
+    assert "data" in json_export
+    assert json_export["metadata"]["format"] == "ODIN JSON Export"
+    assert len(json_export["data"]) == 2 and json_export["data"][0]["cve_id"] == "CVE-2021-44228"
 
     # Test CSV export
     try:

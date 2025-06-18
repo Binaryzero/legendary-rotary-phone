@@ -1,0 +1,228 @@
+name: Create Release with Download Package
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v1.1.0, etc.
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create releases
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full history for changelog
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Extract version info
+      id: version_info
+      run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Get version info from Python module
+        VERSION_INFO=$(python -c "
+import sys
+sys.path.append('.')
+from odin.version import get_version_info, VERSION_HISTORY
+import json
+
+info = get_version_info()
+# Find this version in history
+current_version_entry = next((v for v in VERSION_HISTORY if v['version'] == '$VERSION'), None)
+if current_version_entry:
+    print(json.dumps({
+        'version': info['version'],
+        'build': info['build'], 
+        'release_name': info['release_name'],
+        'changes': current_version_entry['changes']
+    }))
+else:
+    print(json.dumps({
+        'version': info['version'],
+        'build': info['build'],
+        'release_name': info['release_name'], 
+        'changes': ['Release ' + info['version']]
+    }))
+        ")
+        
+        echo "version_info=$VERSION_INFO" >> $GITHUB_OUTPUT
+    
+    - name: Create release package
+      id: package
+      run: |
+        # Create clean release directory
+        mkdir -p release-package/odin-${{ steps.version_info.outputs.version }}
+        
+        # Copy essential files and directories
+        cp -r odin/ release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp -r backend/ release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp -r frontend/ release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp -r scripts/ release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp -r tests/ release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp -r docs/ release-package/odin-${{ steps.version_info.outputs.version }}/
+        
+        # Copy root files
+        cp requirements.txt release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp README.md release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp RELEASE_README.md release-package/odin-${{ steps.version_info.outputs.version }}/README_RELEASE.md
+        cp LICENSE release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp odin_cli.py release-package/odin-${{ steps.version_info.outputs.version }}/
+        cp start_odin_ui.py release-package/odin-${{ steps.version_info.outputs.version }}/
+        
+        # Create installation script
+        cat > release-package/odin-${{ steps.version_info.outputs.version }}/install.sh << 'EOF'
+        #!/bin/bash
+        echo "Installing ODIN v${{ steps.version_info.outputs.version }}..."
+        
+        # Check Python version
+        python3 -c "import sys; assert sys.version_info >= (3, 8)" || {
+            echo "Error: Python 3.8+ required"
+            exit 1
+        }
+        
+        # Install dependencies
+        pip3 install -r requirements.txt
+        
+        # Make scripts executable
+        chmod +x odin_cli.py
+        chmod +x start_odin_ui.py
+        chmod +x scripts/*.py
+        
+        echo "Installation complete!"
+        echo "Run './odin_cli.py --help' to get started"
+        EOF
+        
+        # Create Windows batch file
+        cat > release-package/odin-${{ steps.version_info.outputs.version }}/install.bat << 'EOF'
+        @echo off
+        echo Installing ODIN v${{ steps.version_info.outputs.version }}...
+        
+        REM Install dependencies
+        pip install -r requirements.txt
+        
+        echo Installation complete!
+        echo Run "python odin_cli.py --help" to get started
+        EOF
+        
+        # Make install script executable
+        chmod +x release-package/odin-${{ steps.version_info.outputs.version }}/install.sh
+        
+        # Create zip file
+        cd release-package
+        zip -r odin-${{ steps.version_info.outputs.version }}.zip odin-${{ steps.version_info.outputs.version }}/
+        
+        echo "package_path=release-package/odin-${{ steps.version_info.outputs.version }}.zip" >> $GITHUB_OUTPUT
+        echo "package_name=odin-${{ steps.version_info.outputs.version }}.zip" >> $GITHUB_OUTPUT
+    
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        VERSION_DATA='${{ steps.version_info.outputs.version_info }}'
+        
+        # Parse version info
+        RELEASE_NAME=$(echo "$VERSION_DATA" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['release_name'])")
+        BUILD=$(echo "$VERSION_DATA" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['build'])")
+        CHANGES=$(echo "$VERSION_DATA" | python3 -c "import sys, json; data=json.load(sys.stdin); print('\n'.join(['- ' + change for change in data['changes']]))")
+        
+        # Create release notes
+        cat > release_notes.md << EOF
+        # ODIN v${{ steps.version_info.outputs.version }} ($RELEASE_NAME)
+        
+        **Build:** $BUILD  
+        **Release Date:** $(date +%Y-%m-%d)
+        
+        ## What's New
+        
+        $CHANGES
+        
+        ## Installation
+        
+        1. Download and extract \`${{ steps.package.outputs.package_name }}\`
+        2. Run installation script:
+           - **Linux/Mac:** \`./install.sh\`
+           - **Windows:** \`install.bat\`
+        3. Start using ODIN: \`python odin_cli.py --help\`
+        
+        ## Requirements
+        
+        - Python 3.8+
+        - Internet connection for vulnerability data sources
+        
+        ## Components Included
+        
+        - 🔧 **CLI Tool** - Command-line vulnerability research
+        - 🌐 **Web UI** - Browser-based analysis interface  
+        - 🔌 **API Backend** - FastAPI server for data access
+        - 📊 **Export Tools** - JSON, CSV, Excel output formats
+        - 🧪 **Test Suite** - Comprehensive testing framework
+        - 📖 **Documentation** - Complete usage and API docs
+        
+        ## Quick Start
+        
+        \`\`\`bash
+        # Research a single CVE
+        echo "CVE-2021-44228" > cves.txt
+        python odin_cli.py cves.txt --format json
+        
+        # Start web UI
+        python start_odin_ui.py
+        \`\`\`
+        
+        ---
+        
+        **Full Changelog:** See [VERSION_HISTORY](https://github.com/${{ github.repository }}/blob/main/odin/version.py)
+        EOF
+        
+        echo "release_notes_path=release_notes.md" >> $GITHUB_OUTPUT
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: ODIN v${{ steps.version_info.outputs.version }}
+        body_path: ${{ steps.release_notes.outputs.release_notes_path }}
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Package
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.package.outputs.package_path }}
+        asset_name: ${{ steps.package.outputs.package_name }}
+        asset_content_type: application/zip
+    
+    - name: Upload Installation Scripts
+      run: |
+        # Upload individual installation scripts as separate assets
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: text/plain" \
+          --data-binary @release-package/odin-${{ steps.version_info.outputs.version }}/install.sh \
+          "${{ steps.create_release.outputs.upload_url }}?name=install.sh&label=Linux/Mac%20Install%20Script"
+        
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: text/plain" \
+          --data-binary @release-package/odin-${{ steps.version_info.outputs.version }}/install.bat \
+          "${{ steps.create_release.outputs.upload_url }}?name=install.bat&label=Windows%20Install%20Script"

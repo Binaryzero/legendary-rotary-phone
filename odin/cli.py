@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from .version import get_version_string, get_version_info
+
 # Optional imports with fallbacks
 try:
     import click
@@ -86,8 +88,22 @@ def cli_main() -> None:
                   help='Configuration file')
     @click.option('--detailed', is_flag=True,
                   help='Generate detailed reports for each CVE')
-    def click_main(input_file: str, format: Tuple[str, ...], output_dir: str, config: str, detailed: bool) -> None:
+    @click.option('--version', is_flag=True,
+                  help='Show version information and exit')
+    def click_main(input_file: str, format: Tuple[str, ...], output_dir: str, config: str, detailed: bool, version: bool) -> None:
         """ODIN (OSINT Data Intelligence Nexus) - Multi-Source Intelligence Platform"""
+        if version:
+            version_info = get_version_info()
+            console.print(f"[bold]{get_version_string()}[/bold]")
+            console.print(f"Build: {version_info['build']}")
+            console.print(f"Release Date: {version_info['release_date']}")
+            console.print(f"Data Model: v{version_info['data_model_version']}")
+            console.print(f"API: v{version_info['api_version']}")
+            console.print(f"Enhanced Fields: v{version_info['enhanced_fields_version']}")
+            if version_info['git_commit'] != 'unknown':
+                console.print(f"Git Commit: {version_info['git_commit'][:8]}")
+            return
+        
         main_research(input_file, list(format), output_dir, config, detailed)
     
     click_main()
@@ -103,10 +119,11 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
     - MITRE CTI (Tactics & Weaknesses)
     - CISA KEV & EPSS (Threat Context)
     """
-    # Display banner
+    # Display banner with version
     console.print(Panel.fit(
-        "[bold blue]ODIN (OSINT Data Intelligence Nexus)[/bold blue]\n"
-        "[dim]Multi-Source Vulnerability Intelligence Platform[/dim]",
+        f"[bold blue]ODIN (OSINT Data Intelligence Nexus)[/bold blue]\n"
+        f"[dim]Multi-Source Vulnerability Intelligence Platform[/dim]\n"
+        f"[dim]{get_version_string()}[/dim]",
         border_style="blue"
     ))
     
@@ -175,6 +192,7 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
         console.print(f"[green]Comprehensive JSON data saved to {webui_path}[/green]")
         console.print(f"[cyan]Start the Web UI with: python3 cve_research_ui.py --data-file {webui_path}[/cyan]")
         
+        # TODO: Remove markdown report generation with markdown export removal
         # Also generate individual detailed markdown reports
         details_dir = output_path / f"detailed_reports_{timestamp}"
         details_dir.mkdir(exist_ok=True)

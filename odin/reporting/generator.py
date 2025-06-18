@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from ..version import get_version_info, get_version_string
+
 # Optional imports with fallbacks
 try:
     import pandas as pd
@@ -305,11 +307,22 @@ class ResearchReportGenerator:
             raise ValueError(f"Unsupported export format: {format}. Supported: json, csv, excel, webui, markdown")
     
     def _export_json(self, data: List[ResearchData], path: Path) -> None:
-        """Export to JSON format."""
+        """Export to JSON format with version metadata."""
         json_data = [self._research_data_to_dict(rd) for rd in data]
         
+        # Add version metadata to export
+        export_data = {
+            "metadata": {
+                **get_version_info(),
+                "export_timestamp": datetime.now().isoformat(),
+                "total_cves": len(data),
+                "format": "ODIN JSON Export"
+            },
+            "data": json_data
+        }
+        
         with open(path, 'w') as f:
-            json.dump(json_data, f, indent=2, default=str)
+            json.dump(export_data, f, indent=2, default=str)
         
         console.print(f"[green]✓[/green] Research data exported to {path}")
     
@@ -381,7 +394,45 @@ class ResearchReportGenerator:
                 "kev_due_date": rd.threat.kev_due_date,
                 "kev_required_action": rd.threat.kev_required_action,
                 "kev_known_ransomware": rd.threat.kev_known_ransomware,
-                "kev_notes": rd.threat.kev_notes
+                "kev_notes": rd.threat.kev_notes,
+                "exploit_code_maturity": rd.threat.exploit_code_maturity,
+                "remediation_level": rd.threat.remediation_level,
+                "report_confidence": rd.threat.report_confidence
+            },
+            
+            # Phase 1 Enhanced Fields
+            "cvss_version": rd.cvss_version,
+            "cvss_bt_score": rd.cvss_bt_score,
+            "cvss_bt_severity": rd.cvss_bt_severity,
+            "alternative_cvss_scores": rd.alternative_cvss_scores,
+            "reference_tags": rd.reference_tags,
+            "mitigations": rd.mitigations,
+            "fix_versions": rd.fix_versions,
+            
+            # Enhanced problem type analysis
+            "enhanced_problem_type": {
+                "primary_weakness": rd.enhanced_problem_type.primary_weakness,
+                "secondary_weaknesses": rd.enhanced_problem_type.secondary_weaknesses,
+                "vulnerability_categories": rd.enhanced_problem_type.vulnerability_categories,
+                "impact_types": rd.enhanced_problem_type.impact_types,
+                "attack_vectors": rd.enhanced_problem_type.attack_vectors,
+                "enhanced_cwe_details": rd.enhanced_problem_type.enhanced_cwe_details
+            },
+            
+            # Product intelligence
+            "product_intelligence": {
+                "vendors": rd.product_intelligence.vendors,
+                "products": rd.product_intelligence.products,
+                "affected_versions": rd.product_intelligence.affected_versions,
+                "platforms": rd.product_intelligence.platforms,
+                "modules": rd.product_intelligence.modules
+            },
+            
+            # Control mappings
+            "control_mappings": {
+                "applicable_controls_count": rd.control_mappings.applicable_controls_count,
+                "control_categories": rd.control_mappings.control_categories,
+                "top_controls": rd.control_mappings.top_controls
             },
             
             # Include all CSV/Excel fields for consistency

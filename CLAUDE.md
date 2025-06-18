@@ -5,3 +5,11 @@
 - Always ensure that the code is formatted before committing
 - Always ensure that the code is tested before committing
 - Always test and type check after every change
+- Do not use emojis in documentation or code unless explicitly permitted by the user
+- do not use emojis
+- always save your working todo list to a TODO.md and all of the key elements in a project_status.md.  Do this everytime you pause.  Let me know that you have done so.
+- do a PR at each milestone
+- Do no use emojis except where they explicitly contribute to the design not everything needs one use them sparingly and with purpose they are not candy to be sprinkled around
+- Always update and run tests after changes then document that and Always test and type check after every change
+- always update the @ODIN_AGENT_PERSPECTIVE.md file In your own voice for your own reference and from your perspective so that you have a starting point in the event that you have to come back. Each time we make a  Change it needs to be noted here so that you're aware of it even if it is not important enough to include in the project status or to do list. This file is created by you for you.
+- when I say do your updates that means update your @ODIN_AGENT_PERSPECTIVE.md @TODO.md @project_status.md and save them.  And reminder never use emojis.

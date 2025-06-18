@@ -39,7 +39,18 @@
       "Bash(diff:*)",
       "Bash(timeout 5 python -m backend.app)",
       "Bash(chmod:*)",
-      "Bash(timeout 10 python:*)"
+      "Bash(timeout 10 python:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run tsc:*)",
+      "Bash(npx tsc:*)",
+      "Bash(/dev/null)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(PYTHONPATH=. python:*)",
+      "Bash(PYTHONPATH=.. python -c \"\nimport sys\nsys.path.insert(0, ''..'')\ntry:\n    from odin.core.engine import VulnerabilityResearchEngine\n    print('' ODIN import successful'')\nexcept ImportError as e:\n    print(f'' ODIN import failed: {e}'')\n\n# Test the backend app initialization\ntry:\n    from app import app, TOOLKIT_AVAILABLE\n    print(f'' Backend app initialized, toolkit available: {TOOLKIT_AVAILABLE}'')\nexcept Exception as e:\n    print(f'' Backend init failed: {e}'')\n\")",
+      "Bash(timeout:*)",
+      "Bash(gtimeout 10 npm start)"
     ],
     "deny": []
   }

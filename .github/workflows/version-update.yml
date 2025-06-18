@@ -1,0 +1,90 @@
+name: Update Version on PR Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  update-version:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Determine version bump type
+      id: bump-type
+      run: |
+        # Check PR labels to determine bump type
+        LABELS="${{ github.event.pull_request.labels.*.name }}"
+        
+        if echo "$LABELS" | grep -q "major"; then
+          echo "bump_type=major" >> $GITHUB_OUTPUT
+        elif echo "$LABELS" | grep -q "minor"; then
+          echo "bump_type=minor" >> $GITHUB_OUTPUT
+        elif echo "$LABELS" | grep -q "patch"; then
+          echo "bump_type=patch" >> $GITHUB_OUTPUT
+        else
+          # Default to patch for normal PRs
+          echo "bump_type=patch" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Extract PR changes
+      id: changes
+      run: |
+        # Extract PR title and body for changes list
+        PR_TITLE="${{ github.event.pull_request.title }}"
+        echo "changes=[\"$PR_TITLE\"]" >> $GITHUB_OUTPUT
+    
+    - name: Update version
+      run: |
+        python scripts/bump-version.py ${{ steps.bump-type.outputs.bump_type }} \
+          --changes "${{ github.event.pull_request.title }}"
+    
+    - name: Commit version update
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add odin/version.py
+        git commit -m "chore: bump version after PR #${{ github.event.pull_request.number }} merge
+        
+        Auto-generated version bump for: ${{ github.event.pull_request.title }}
+        
+        Co-authored-by: GitHub Actions <noreply@github.com>"
+        git push
+    
+    - name: Create version tag
+      run: |
+        # Read new version from file
+        NEW_VERSION=$(python -c "
+import sys
+sys.path.append('.')
+from odin.version import __version__
+print(__version__)
+        ")
+        
+        # Create annotated tag with version info
+        git tag -a "v$NEW_VERSION" -m "Release ODIN v$NEW_VERSION
+        
+Auto-generated release for: ${{ github.event.pull_request.title }}
+        
+Commit: ${{ github.sha }}
+Build: $(python -c 'from odin.version import __build__; print(__build__)')
+        
+This tag will trigger automatic release creation with download package."
+        
+        git push origin "v$NEW_VERSION"

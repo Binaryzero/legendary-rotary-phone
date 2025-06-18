@@ -2,22 +2,30 @@
 
 ## **Available vs. Extracted Field Comparison**
 
-This analysis compares the complete field inventory from all data sources against ODIN's current extraction capabilities, identifying high-value missing intelligence opportunities.
+This analysis has been updated to reflect actual data source capabilities and ODIN's optimized field extraction after removing untrusted sources and non-existent fields.
+
+## **CRITICAL UPDATE: Documentation vs Reality**
+
+**Previous Assumptions vs Actual Findings:**
+- **ARPSyndicate VEDAS fields**: Assumed available → **REMOVED** (untrusted community source)
+- **Temporal CVSS fields**: Assumed in cvss-bt → **NOT PRESENT** in actual data
+- **Field count**: Claimed 31% coverage → **Achieved 67 optimized fields** from trusted sources
+- **Quality focus**: Quantity over quality → **Quality over quantity** with institutional sources only
 
 ---
 
 ## **Gap Analysis Summary**
 
-### **Overall Statistics**
-| Data Source | Available Fields | Currently Extracted | Extraction Rate | Missing High-Value Fields |
-|-------------|------------------|-------------------|-----------------|--------------------------|
-| **CVEProject/cvelistV5** | 45+ fields | 8 fields | 18% | 15 high-value |
-| **Trickest/CVE** | 15+ fields | 5 fields | 33% | 6 high-value |
-| **t0sche/cvss-bt** | 25+ fields | 15 fields | 60% | 4 high-value |
-| **ARPSyndicate/cve-scores** | 15+ fields | 3 fields | 20% | 8 high-value |
-| **Patrowl/PatrowlHearsData** | 35+ fields | 12 fields | 34% | 12 high-value |
-| **FIRST.org EPSS API** | 15+ fields | 3 fields | 20% | 5 high-value |
-| **TOTAL** | **150+ fields** | **46 fields** | **31%** | **50+ fields** |
+### **Updated Statistics (Post-Cleanup)**
+| Data Source | Status | Active Fields | Data Quality | Notes |
+|-------------|--------|---------------|--------------|-------|
+| **CVEProject/cvelistV5** | ACTIVE | ~20 fields | HIGH | Authoritative source |
+| **Trickest/CVE** | ACTIVE | ~10 fields | HIGH | Institutional PoC database |
+| **t0sche/cvss-bt** | ACTIVE | ~15 fields | HIGH | Academic/institutional |
+| **ARPSyndicate/cve-scores** | REMOVED | 0 fields | LOW | Community-driven, untrusted |
+| **Patrowl/PatrowlHearsData** | ACTIVE | ~12 fields | MEDIUM | Aggregated feeds |
+| **MITRE/cti** | ACTIVE | ~10 fields | HIGH | Official MITRE data |
+| **TOTAL** | **5 SOURCES** | **67 fields** | **HIGH** | **Trusted only** |
 
 ---
 
