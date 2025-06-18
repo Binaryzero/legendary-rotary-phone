@@ -2,7 +2,7 @@
 
 **ODIN v1.0.2** - A comprehensive vulnerability intelligence aggregation platform that collects and structures vulnerability data from multiple authoritative OSINT sources. ODIN focuses on data collection and aggregation, not prioritization or risk scoring, enabling researchers to make informed decisions with complete intelligence context.
 
-## 🎯 What ODIN Does
+##  What ODIN Does
 
 ODIN aggregates vulnerability intelligence from **5 authoritative data layers** and presents it through multiple interfaces:
 
@@ -15,7 +15,7 @@ ODIN aggregates vulnerability intelligence from **5 authoritative data layers** 
 ### Core Philosophy
 ODIN is a **data collector and aggregator**, not a decision maker. It provides comprehensive, traceable intelligence so humans can make informed security decisions.
 
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 ### **5-Layer Data Architecture**
 
@@ -35,7 +35,7 @@ ODIN is a **data collector and aggregator**, not a decision maker. It provides c
 - **Exploit Intelligence**: Verification status, enhanced titles, reliability assessment
 - **Control Mappings**: NIST 800-53 control relationships
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 - Python 3.8+
@@ -80,7 +80,7 @@ python start_odin_ui.py --backend-port 8080 --frontend-port 3001
 
 The web interface will be available at `http://localhost:3000` with API documentation at `http://localhost:8000/docs`.
 
-## 📊 Export Formats
+##  Export Formats
 
 ### JSON Export (Comprehensive)
 ```bash
@@ -106,7 +106,7 @@ python odin_cli.py cves.txt --format webui
 - Timestamp-based file naming
 - Enhanced metadata structure
 
-## 🛠️ Development
+##  Development
 
 ### Running Tests
 ```bash
@@ -148,7 +148,7 @@ scripts/              # Development tools
 docs/                 # Documentation
 ```
 
-## 📈 Version Management
+##  Version Management
 
 ODIN uses **enterprise-grade version management** with automatic releases:
 
@@ -163,16 +163,16 @@ ODIN uses **enterprise-grade version management** with automatic releases:
 - **Data Model**: v1.0
 - **Enhanced Fields**: v1.0
 
-## 🔒 Security Considerations
+##  Security Considerations
 
-**⚠️ IMPORTANT**: ODIN is currently in development with **known security limitations**:
+** IMPORTANT**: ODIN is currently in development with **known security limitations**:
 
 - No authentication or authorization implemented
 - Input validation needs enhancement  
 - Not recommended for production deployment without security hardening
 - See [SECURITY.md](SECURITY.md) for current security status
 
-## 📋 Data Sources
+##  Data Sources
 
 ### Authoritative Sources
 | Repository | Layer | Purpose | Update Frequency |
@@ -189,7 +189,7 @@ ODIN uses **enterprise-grade version management** with automatic releases:
 - **Session Caching**: Prevents redundant API calls during batch processing
 - **Error Handling**: Comprehensive logging and fallback mechanisms
 
-## 🤝 Contributing
+##  Contributing
 
 We welcome contributions! Please see our development guidelines:
 
@@ -206,17 +206,17 @@ We welcome contributions! Please see our development guidelines:
 5. Submit PR with appropriate labels (major/minor/patch)
 6. Version management handles automatic updates
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+##  Support
 
 - **Issues**: Report bugs and feature requests on [GitHub Issues](https://github.com/Binaryzero/legendary-rotary-phone/issues)
 - **Documentation**: See [docs/](docs/) directory for detailed documentation
 - **API Reference**: Available at `/docs` endpoint when backend is running
 
-## 🎯 Philosophy: Data Collection, Not Decision Making
+##  Philosophy: Data Collection, Not Decision Making
 
 ODIN embodies the principle that **comprehensive data enables better human decisions**. Rather than algorithmic black boxes that make prioritization decisions, ODIN provides transparent, traceable intelligence that security professionals can validate and reason about.
 
@@ -234,13 +234,13 @@ ODIN embodies the principle that **comprehensive data enables better human decis
 
 ---
 
-## 📊 Current Status
+##  Current Status
 
-**Core Functionality**: ✅ Complete - All enhanced fields operational  
-**Export System**: ✅ JSON/WebUI working, CSV functional
-**Version Management**: ✅ Complete - Automatic updates operational  
-**Release Automation**: ✅ Complete - GitHub releases working
-**Security Status**: ⚠️ Development - Security hardening in progress
+**Core Functionality**:  Complete - All enhanced fields operational  
+**Export System**:  JSON/WebUI working, CSV functional
+**Version Management**:  Complete - Automatic updates operational  
+**Release Automation**:  Complete - GitHub releases working
+**Security Status**:  Development - Security hardening in progress
 **Field Coverage**: **80 fields** from 5 authoritative sources
 
 **ODIN provides the intelligence. You make the decisions.**
