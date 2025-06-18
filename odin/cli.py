@@ -79,9 +79,6 @@ def cli_main() -> None:
     
     @click.command()
     @click.argument('input_file', type=click.Path(exists=True), default='cves.txt')
-    @click.option('--format', '-f', multiple=True, 
-                  type=click.Choice(['json', 'csv', 'markdown', 'excel', 'webui']),
-                  default=['markdown'], help='Output format(s)')
     @click.option('--output-dir', '-o', default='research_output', 
                   help='Output directory for reports')
     @click.option('--config', '-c', type=click.Path(), default=DEFAULT_CONFIG,
@@ -90,7 +87,7 @@ def cli_main() -> None:
                   help='Generate detailed reports for each CVE')
     @click.option('--version', is_flag=True,
                   help='Show version information and exit')
-    def click_main(input_file: str, format: Tuple[str, ...], output_dir: str, config: str, detailed: bool, version: bool) -> None:
+    def click_main(input_file: str, output_dir: str, config: str, detailed: bool, version: bool) -> None:
         """ODIN (OSINT Data Intelligence Nexus) - Multi-Source Intelligence Platform"""
         if version:
             version_info = get_version_info()
@@ -104,12 +101,12 @@ def cli_main() -> None:
                 console.print(f"Git Commit: {version_info['git_commit'][:8]}")
             return
         
-        main_research(input_file, list(format), output_dir, config, detailed)
+        main_research(input_file, output_dir, config, detailed)
     
     click_main()
 
 
-def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown'], output_dir: str = 'research_output', 
+def main_research(input_file: str = 'cves.txt', output_dir: str = 'research_output', 
                  config: str = DEFAULT_CONFIG, detailed: bool = False) -> None:
     """ODIN (OSINT Data Intelligence Nexus) - Multi-Source Intelligence Platform
     
@@ -168,41 +165,42 @@ def main_research(input_file: str = 'cves.txt', format: List[str] = ['markdown']
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
     
-    # Export in requested formats
+    # Export in all formats automatically
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    for fmt in format:
-        filename = f"research_report_{timestamp}.{fmt}"
-        if fmt == "excel":
-            filename = f"research_report_{timestamp}.xlsx"
-        elif fmt == "webui":
-            filename = f"research_report_{timestamp}.json"
-        
-        report_gen.export_research_data(
-            research_results,
-            fmt,
-            output_path / filename
-        )
+    # Always generate JSON (for Web UI and programmatic access)
+    json_filename = f"research_report_{timestamp}.json"
+    report_gen.export_research_data(
+        research_results,
+        "json",
+        output_path / json_filename
+    )
     
-    # Generate detailed reports if requested
+    # Always generate CSV (for Excel and data analysis)
+    csv_filename = f"research_report_{timestamp}.csv"
+    report_gen.export_research_data(
+        research_results,
+        "csv",
+        output_path / csv_filename
+    )
+    
+    # Always generate Excel (for structured spreadsheet analysis)
+    excel_filename = f"research_report_{timestamp}.xlsx"
+    report_gen.export_research_data(
+        research_results,
+        "excel", 
+        output_path / excel_filename
+    )
+    
+    console.print(f"\n[green]All formats exported:[/green]")
+    console.print(f"  - JSON: {output_path / json_filename}")
+    console.print(f"  - CSV: {output_path / csv_filename}")
+    console.print(f"  - Excel: {output_path / excel_filename}")
+    console.print(f"\n[cyan]Start the Web UI with: python start_odin_ui.py --data-file {output_path / json_filename}[/cyan]")
+    
+    # The --detailed flag is now deprecated since we always generate all formats
     if detailed:
-        # Generate comprehensive JSON data for Web UI
-        webui_path = output_path / f"webui_data_{timestamp}.json"
-        report_gen.export_research_data(research_results, "json", webui_path)
-        console.print(f"[green]Comprehensive JSON data saved to {webui_path}[/green]")
-        console.print(f"[cyan]Start the Web UI with: python3 cve_research_ui.py --data-file {webui_path}[/cyan]")
-        
-        # TODO: Remove markdown report generation with markdown export removal
-        # Also generate individual detailed markdown reports
-        details_dir = output_path / f"detailed_reports_{timestamp}"
-        details_dir.mkdir(exist_ok=True)
-        
-        for rd in research_results[:20]:  # Limit to top 20
-            report_content = report_gen.generate_detailed_report(rd)
-            report_path = details_dir / f"{rd.cve_id}_report.md"
-            report_path.write_text(report_content)
-        
-        console.print(f"[green]✓[/green] Detailed reports saved to {details_dir}")
+        console.print(f"\n[yellow]Note: The --detailed flag is deprecated. All formats are now generated automatically.[/yellow]")
     
     # Show statistics
     console.print("\n[bold]Research Statistics:[/bold]")

@@ -3,6 +3,7 @@
 ## COMPLETED: Version Management & Release Automation System
 
 ### **MAJOR MILESTONE ACHIEVED: Enterprise-Grade Release Infrastructure & Complete Documentation**
+### **ARCHITECTURE TRANSITION APPROVED: CLI-Centric Simplification**
 
 ### Version Management System (COMPLETED)
 - [x] **Central Version Module**: `odin/version.py` with comprehensive tracking
@@ -23,6 +24,7 @@
 - [x] **Deployment Ready**: PR #32 successfully merged and deployed to production
 - [x] **Release Testing**: v1.0.2 release created and verified working
 - [x] **Documentation Sanitization**: Complete update of all docs to reflect current ODIN state
+- [x] **Architecture Analysis**: Identified API removal opportunity for enhanced security
 
 ### **PREVIOUSLY COMPLETED: UI Architecture Refactor & Data Pipeline**
 
@@ -67,6 +69,39 @@
 
 ---
 
+## ARCHITECTURE TRANSITION: CLI-Centric Simplification (IN PROGRESS)
+
+### **APPROVED PLAN: Remove API, Use CLI + JSON + Web UI**
+
+#### **Architecture Decision (2025-06-18)**
+- **Current**: Web UI → FastAPI Backend → ODIN Engine → JSON/CSV Exports  
+- **Proposed**: Web UI → CLI Tool Directly → All Formats Generated → JSON Loaded in UI
+- **Security Benefit**: Eliminates entire API attack surface (no authentication, input validation, rate limiting vulnerabilities)
+- **Simplicity Benefit**: CLI generates all formats automatically, Web UI becomes pure visualization layer
+
+#### **Key Discovery: WebUI and JSON Formats are Identical**
+- **Investigation Result**: WebUI format calls exact same `_export_json()` method as JSON format
+- **Decision**: Remove redundant WebUI format, use JSON for both CLI exports and Web UI loading
+- **Simplification**: CLI generates JSON + CSV + Excel (3 formats instead of 4)
+
+#### **Implementation Status**
+- [x] **Phase 1: CLI Simplification** - Removed format flags, CLI now always generates JSON/CSV/Excel automatically
+- [x] **Phase 2: Web UI Direct CLI Integration** - Created simplified launcher (start_odin_ui_simple.py) and data hook (useCVEDataSimple.ts)
+- [x] **Phase 3: Components Created** - Static file server + CLI executor ready for use
+- [x] **Phase 4: Foundation Complete** - Core components for file-based architecture in place
+
+#### **New User Workflow**
+```bash
+# CLI generates all formats automatically
+python odin_cli.py cves.txt
+# Creates: JSON (for Web UI) + CSV (for Excel) + Excel (structured)
+
+# Web UI calls CLI directly, loads generated JSON
+python start_odin_ui.py  # No backend needed, just static files + CLI execution
+```
+
+---
+
 ## CURRENT DEVELOPMENT STATUS
 
 ### **UI Enhancement - MAJOR IMPROVEMENTS COMPLETED**
@@ -93,6 +128,19 @@
 - **Resolution**: Fixed field mappings in engine to match actual data model structure
 - **Verification**: All 80+ fields now correctly flow from connectors → engine → API → UI
 - **Status**: RESOLVED - All Phase 1 enhanced fields now functional
+
+### **CRITICAL EXPORT FORMAT CRISIS - RESOLVED (2025-06-18)**
+- **Problem**: Systematic field gaps between export formats - JSON missing 8+ fields that CSV had
+- **Discovery**: Comprehensive code audit revealed documentation claimed 100% coverage but gaps existed
+- **Root Cause**: JSON export missing 6 WeaknessTactics fields + 2 ExploitReference fields
+- **Additional Issue**: CSV "Exploit Types" field produced repetitive gibberish
+- **Resolution**: 
+  - Added all missing fields to JSON export (technique_details, enhanced_*_descriptions, etc.)
+  - Added title and date_found to exploit objects in JSON
+  - Fixed CSV Exploit Types to remove duplicates using dict.fromkeys()
+  - Rewrote all documentation with accurate field counts
+- **Verification**: Tested with CVE-2021-44228 - all formats now consistent
+- **Status**: RESOLVED - All export formats now have complete field coverage
 
 ### **VERSION MANAGEMENT & RELEASE AUTOMATION - COMPLETE**
 - **Version System**: Comprehensive version tracking with automatic updates on PR merge

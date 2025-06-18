@@ -287,16 +287,10 @@ class ResearchReportGenerator:
         - json: Comprehensive data export for programmatic use and web UI
         - csv: Tabular format for spreadsheet analysis  
         - excel: Excel format with all fields (same structure as CSV)
-        - webui: JSON format optimized for web UI visualization
-        - markdown: Detailed markdown reports
-        
-        Note: Use --detailed flag for interactive Web UI visualization
+        - markdown: Detailed markdown reports (deprecated - will be removed)
         """
-        if format == "json" or format == "webui":
-            # JSON and WebUI use the same comprehensive format
+        if format == "json":
             self._export_json(research_data, output_path)
-            if format == "webui":
-                console.print(f"[cyan]Start the web UI with: python3 cve_research_ui.py --data-file {output_path}[/cyan]")
         elif format == "csv":
             self._export_csv(research_data, output_path)
         elif format == "excel":
@@ -304,7 +298,7 @@ class ResearchReportGenerator:
         elif format == "markdown":
             self._export_markdown(research_data, output_path)
         else:
-            raise ValueError(f"Unsupported export format: {format}. Supported: json, csv, excel, webui, markdown")
+            raise ValueError(f"Unsupported export format: {format}. Supported: json, csv, excel, markdown")
     
     def _export_json(self, data: List[ResearchData], path: Path) -> None:
         """Export to JSON format with version metadata."""
@@ -359,7 +353,9 @@ class ResearchReportGenerator:
                     "url": e.url,
                     "source": e.source,
                     "type": e.type,
-                    "verified": e.verified
+                    "verified": e.verified,
+                    "title": e.title,
+                    "date_found": e.date_found.isoformat() if e.date_found else None
                 } for e in rd.exploits
             ],
             "exploit_maturity": rd.exploit_maturity,
@@ -372,7 +368,13 @@ class ResearchReportGenerator:
                 "capec_details": rd.weakness.capec_details,
                 "attack_techniques": rd.weakness.attack_techniques,
                 "attack_tactics": rd.weakness.attack_tactics,
-                "kill_chain_phases": rd.weakness.kill_chain_phases
+                "kill_chain_phases": rd.weakness.kill_chain_phases,
+                "technique_details": rd.weakness.technique_details,
+                "tactic_details": rd.weakness.tactic_details,
+                "enhanced_technique_descriptions": rd.weakness.enhanced_technique_descriptions,
+                "enhanced_tactic_descriptions": rd.weakness.enhanced_tactic_descriptions,
+                "enhanced_capec_descriptions": rd.weakness.enhanced_capec_descriptions,
+                "alternative_cwe_mappings": rd.weakness.alternative_cwe_mappings
             },
             
             # Threat intelligence
@@ -520,7 +522,7 @@ class ResearchReportGenerator:
             # Threat intelligence fields
             'Exploit Count': len(exploit_urls),
             'Exploit Maturity': rd.exploit_maturity,
-            'Exploit Types': self._sanitize_csv_text('; '.join([e.type for e in rd.exploits]) if rd.exploits else ''),
+            'Exploit Types': self._sanitize_csv_text('; '.join(list(dict.fromkeys([e.type for e in rd.exploits]))) if rd.exploits else ''),
             'Technology Stack': self._sanitize_csv_text('; '.join(rd.product_intelligence.products) if rd.product_intelligence.products else ''),
             'CISA KEV': 'Yes' if rd.threat.in_kev else 'No',
             'Ransomware Campaign Use': 'Yes' if rd.threat.ransomware_campaign else 'No',
