@@ -39,3 +39,4 @@ jobs:
             git add .
             git commit -m "chore: auto-remove emojis from content [bot]"
             git push origin HEAD:${{ github.head_ref || github.ref }}
+          fi
