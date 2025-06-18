@@ -20,6 +20,7 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
+        ref: main
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -31,15 +32,19 @@ jobs:
       run: |
         # Check PR labels to determine bump type
         LABELS="${{ github.event.pull_request.labels.*.name }}"
+        echo "PR labels: $LABELS"
         
         if echo "$LABELS" | grep -q "major"; then
+          echo "Detected major version bump"
           echo "bump_type=major" >> $GITHUB_OUTPUT
         elif echo "$LABELS" | grep -q "minor"; then
+          echo "Detected minor version bump"
           echo "bump_type=minor" >> $GITHUB_OUTPUT
         elif echo "$LABELS" | grep -q "patch"; then
+          echo "Detected patch version bump"
           echo "bump_type=patch" >> $GITHUB_OUTPUT
         else
-          # Default to patch for normal PRs
+          echo "No version label found, defaulting to patch"
           echo "bump_type=patch" >> $GITHUB_OUTPUT
         fi
     
@@ -52,34 +57,47 @@ jobs:
     
     - name: Update version
       run: |
+        echo "Bump type: ${{ steps.bump-type.outputs.bump_type }}"
+        echo "PR title: ${{ github.event.pull_request.title }}"
         python scripts/bump-version.py ${{ steps.bump-type.outputs.bump_type }} \
           --changes "${{ github.event.pull_request.title }}"
     
     - name: Commit version update
       run: |
+        echo "Configuring git..."
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
+        
+        echo "Checking git status..."
+        git status
+        
+        echo "Adding version file..."
         git add odin/version.py
+        
+        echo "Committing changes..."
         git commit -m "chore: bump version after PR #${{ github.event.pull_request.number }} merge
-        
+
         Auto-generated version bump for: ${{ github.event.pull_request.title }}
-        
+
         Co-authored-by: GitHub Actions <noreply@github.com>"
+        
+        echo "Pushing changes..."
         git push
     
     - name: Create version tag
       run: |
         # Read new version from file
         NEW_VERSION=$(python -c "import sys; sys.path.append('.'); from odin.version import __version__; print(__version__)")
+        NEW_BUILD=$(python -c "import sys; sys.path.append('.'); from odin.version import __build__; print(__build__)")
         
         # Create annotated tag with version info
         git tag -a "v$NEW_VERSION" -m "Release ODIN v$NEW_VERSION
-        
+
         Auto-generated release for: ${{ github.event.pull_request.title }}
-        
+
         Commit: ${{ github.sha }}
-        Build: $(python -c 'from odin.version import __build__; print(__build__)')
-        
+        Build: $NEW_BUILD
+
         This tag will trigger automatic release creation with download package."
         
         git push origin "v$NEW_VERSION"
