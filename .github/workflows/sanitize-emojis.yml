@@ -1,4 +1,6 @@
 name: Sanitize Emojis
+permissions:
+  contents: write
 
 on:
   push:
