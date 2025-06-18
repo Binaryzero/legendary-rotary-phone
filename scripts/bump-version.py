@@ -105,7 +105,7 @@ def main():
     parser = argparse.ArgumentParser(description='Bump ODIN version')
     parser.add_argument('bump_type', choices=['major', 'minor', 'patch', 'build'],
                        help='Type of version bump')
-    parser.add_argument('--changes', nargs='+', 
+    parser.add_argument('--changes', nargs='*', 
                        help='List of changes for this version')
     
     args = parser.parse_args()

@@ -56,8 +56,6 @@ def check_compatibility(required_version: str) -> bool:
 
 # Version history for reference
 VERSION_HISTORY = [
-    
-    
     {
         "version": "1.0.1",
         "build": "20250618.1",
@@ -67,12 +65,6 @@ VERSION_HISTORY = [
     },{
         "version": "1.0.0",
         "build": "20250617.2",
-        "date": "2025-06-17",
-        "name": "TBD",
-        "changes": ['Test version bump functionality']
-    },{
-        "version": "1.0.0",
-        "build": "20250617.1",
         "date": "2025-06-17",
         "name": "Foundation",
         "changes": [

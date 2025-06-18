@@ -50,7 +50,16 @@
       "Bash(PYTHONPATH=. python:*)",
       "Bash(PYTHONPATH=.. python -c \"\nimport sys\nsys.path.insert(0, ''..'')\ntry:\n    from odin.core.engine import VulnerabilityResearchEngine\n    print('' ODIN import successful'')\nexcept ImportError as e:\n    print(f'' ODIN import failed: {e}'')\n\n# Test the backend app initialization\ntry:\n    from app import app, TOOLKIT_AVAILABLE\n    print(f'' Backend app initialized, toolkit available: {TOOLKIT_AVAILABLE}'')\nexcept Exception as e:\n    print(f'' Backend init failed: {e}'')\n\")",
       "Bash(timeout:*)",
-      "Bash(gtimeout 10 npm start)"
+      "Bash(gtimeout 10 npm start)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(git fetch:*)",
+      "Bash(git tag:*)",
+      "Bash(gh release list:*)",
+      "Bash(gh release view:*)",
+      "Bash(git stash:*)",
+      "Bash(gh release create:*)",
+      "Bash(gh pr list:*)"
     ],
     "deny": []
   }
