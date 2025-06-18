@@ -29,7 +29,7 @@ async def test_phase2_missing_fields():
     print(f"  Verified Exploits: {len(verified_exploits)}")
     
     for i, exploit in enumerate(research_data.exploits[:3]):
-        status = "✅ Verified" if exploit.verified else "⚠️  Unverified"
+        status = " Verified" if exploit.verified else "  Unverified"
         print(f"  {i+1}. {exploit.type} - {status}")
         if exploit.title:
             print(f"      Title: {exploit.title}")
@@ -52,7 +52,7 @@ async def test_phase2_missing_fields():
         any(e.title for e in research_data.exploits)  # Exploit titles
     ])
     
-    print(f"\n🎯 Phase 2 Status: {'SUCCESS' if phase2_working else 'NEEDS WORK'}")
+    print(f"\n Phase 2 Status: {'SUCCESS' if phase2_working else 'NEEDS WORK'}")
     
     # Count new fields populated
     fields_populated = 0

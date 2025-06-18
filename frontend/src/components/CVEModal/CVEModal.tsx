@@ -116,7 +116,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>Overview & Classification</span>
               <span className={`expand-caret ${expandedSections.overview ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.overview && (
@@ -143,7 +143,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>Threat Intelligence & Risk Context</span>
               <span className={`expand-caret ${expandedSections.threat ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.threat && (
@@ -225,7 +225,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
               >
                 <span>Alternative CVSS Scores ({cve.alternative_cvss_scores.length})</span>
                 <span className={`expand-caret ${expandedSections.alternative_cvss ? 'expanded' : ''}`}>
-                  ▶
+                  
                 </span>
               </button>
               {expandedSections.alternative_cvss && (
@@ -255,7 +255,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>Known Exploits ({cve.exploits?.length || 0})</span>
               <span className={`expand-caret ${expandedSections.exploits ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.exploits && (
@@ -330,7 +330,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>Patches & Remediation ({cve.patches?.length || 0})</span>
               <span className={`expand-caret ${expandedSections.patches ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.patches && (
@@ -370,7 +370,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
               >
                 <span>Enhanced Problem Type Analysis</span>
                 <span className={`expand-caret ${expandedSections.enhanced_problem_type ? 'expanded' : ''}`}>
-                  ▶
+                  
                 </span>
               </button>
               {expandedSections.enhanced_problem_type && (
@@ -424,7 +424,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>MITRE Framework</span>
               <span className={`expand-caret ${expandedSections.mitre ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.mitre && (
@@ -515,7 +515,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
               >
                 <span>Security Control Mappings</span>
                 <span className={`expand-caret ${expandedSections.controls ? 'expanded' : ''}`}>
-                  ▶
+                  
                 </span>
               </button>
               {expandedSections.controls && (
@@ -558,7 +558,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
               >
                 <span>Product Intelligence</span>
                 <span className={`expand-caret ${expandedSections.product_intelligence ? 'expanded' : ''}`}>
-                  ▶
+                  
                 </span>
               </button>
               {expandedSections.product_intelligence && (
@@ -635,7 +635,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>References & Mitigations ({(cve.references?.length || 0) + (cve.mitigations?.length || 0)})</span>
               <span className={`expand-caret ${expandedSections.references ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.references && (
@@ -701,7 +701,7 @@ const CVEModal: React.FC<CVEModalProps> = memo(({
             >
               <span>Technical Details</span>
               <span className={`expand-caret ${expandedSections.technical ? 'expanded' : ''}`}>
-                ▶
+                
               </span>
             </button>
             {expandedSections.technical && (
