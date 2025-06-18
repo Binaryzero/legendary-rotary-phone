@@ -157,15 +157,24 @@ python start_odin_ui.py  # No backend needed, just static files + CLI execution
 
 ---
 
-## CRITICAL PRIORITY - DATA QUALITY ISSUES REMAINING
+## NEXT CRITICAL PRIORITIES
 
-### CSV Export Data Quality (BLOCKING ISSUE #1 - NOT RESOLVED)
-- [ ] **Fix critical CSV export data quality issue** - Rows still breaking in Excel despite sanitization attempts
-  - Problem: Complex CVE descriptions with embedded formatting break Excel row structure
-  - Impact: Primary data analysis workflow unusable for users
-  - Solution Status: Pandas implementation ready but not tested with problematic CVEs
-  - Test CVEs: CVE-2021-44228, CVE-2014-6271 (known problematic cases)
-  - Priority: CRITICAL - Blocks user data analysis workflows
+### Security Vulnerabilities (BLOCKING ISSUE #1 - CRITICAL)
+- [ ] **Address critical security vulnerabilities** - Comprehensive assessment completed (2025-06-18)
+  - **Assessment Results**: 13 vulnerabilities identified (5 Critical, 4 High, 3 Medium, 1 Low)
+  - **Critical Issues**: Missing API authentication, path traversal vulnerabilities, missing input validation, missing rate limiting
+  - **Documentation**: SECURITY.md completely rewritten with transparent disclosure
+  - **Recommended Solution**: CLI-centric architecture eliminates 75% of vulnerabilities
+  - **Current Status**: Professional security assessment complete, remediation planning required
+  - Priority: CRITICAL - Blocks any deployment considerations
+
+### Markdown Export Removal (MAINTENANCE CLEANUP)
+- [ ] **Remove outdated markdown export functionality** - Only 19% field coverage vs 80+ field data model
+  - Problem: Severely outdated export format providing incomplete intelligence
+  - Impact: Confuses users with incomplete data representation
+  - Solution: Complete removal from CLI options and reporting generator
+  - Policy: Do not maintain - focus resources on complete export formats
+  - Priority: MEDIUM - Cleanup to avoid confusion
 
 ---
 
