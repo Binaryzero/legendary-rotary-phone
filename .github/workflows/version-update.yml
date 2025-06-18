@@ -70,21 +70,16 @@ jobs:
     - name: Create version tag
       run: |
         # Read new version from file
-        NEW_VERSION=$(python -c "
-import sys
-sys.path.append('.')
-from odin.version import __version__
-print(__version__)
-        ")
+        NEW_VERSION=$(python -c "import sys; sys.path.append('.'); from odin.version import __version__; print(__version__)")
         
         # Create annotated tag with version info
         git tag -a "v$NEW_VERSION" -m "Release ODIN v$NEW_VERSION
         
-Auto-generated release for: ${{ github.event.pull_request.title }}
+        Auto-generated release for: ${{ github.event.pull_request.title }}
         
-Commit: ${{ github.sha }}
-Build: $(python -c 'from odin.version import __build__; print(__build__)')
+        Commit: ${{ github.sha }}
+        Build: $(python -c 'from odin.version import __build__; print(__build__)')
         
-This tag will trigger automatic release creation with download package."
+        This tag will trigger automatic release creation with download package."
         
         git push origin "v$NEW_VERSION"
