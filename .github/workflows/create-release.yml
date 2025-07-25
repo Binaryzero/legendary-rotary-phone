@@ -71,19 +71,14 @@ else:
         
         # Copy essential files and directories
         cp -r odin/ release-package/odin-${{ steps.version_info.outputs.version }}/
-        cp -r backend/ release-package/odin-${{ steps.version_info.outputs.version }}/
-        cp -r frontend/ release-package/odin-${{ steps.version_info.outputs.version }}/
         cp -r scripts/ release-package/odin-${{ steps.version_info.outputs.version }}/
         cp -r tests/ release-package/odin-${{ steps.version_info.outputs.version }}/
-        cp -r docs/ release-package/odin-${{ steps.version_info.outputs.version }}/
         
         # Copy root files
         cp requirements.txt release-package/odin-${{ steps.version_info.outputs.version }}/
         cp README.md release-package/odin-${{ steps.version_info.outputs.version }}/
-        cp RELEASE_README.md release-package/odin-${{ steps.version_info.outputs.version }}/README_RELEASE.md
         cp LICENSE release-package/odin-${{ steps.version_info.outputs.version }}/
         cp odin_cli.py release-package/odin-${{ steps.version_info.outputs.version }}/
-        cp start_odin_ui.py release-package/odin-${{ steps.version_info.outputs.version }}/
         
         # Create installation script
         cat > release-package/odin-${{ steps.version_info.outputs.version }}/install.sh << 'EOF'
@@ -101,7 +96,6 @@ else:
         
         # Make scripts executable
         chmod +x odin_cli.py
-        chmod +x start_odin_ui.py
         chmod +x scripts/*.py
         
         echo "Installation complete!"
@@ -167,21 +161,20 @@ else:
         ## Components Included
         
         - **CLI Tool** - Command-line vulnerability research
-        - **Web UI** - Browser-based analysis interface  
-        - **API Backend** - FastAPI server for data access
-        - **Export Tools** - JSON, CSV, Excel output formats
+        - **CLI Interface** - Command-line vulnerability research tool
+        - **Export Tools** - JSON, CSV, Excel output formats  
         - **Test Suite** - Comprehensive testing framework
-        - **Documentation** - Complete usage and API docs
+        - **Documentation** - Complete usage and development docs
         
         ## Quick Start
         
         \`\`\`bash
-        # Research a single CVE
+        # Research CVEs from file
         echo "CVE-2021-44228" > cves.txt
-        python odin_cli.py cves.txt --format json
+        python odin_cli.py cves.txt
         
-        # Start web UI
-        python start_odin_ui.py
+        # View results in research_output/ directory
+        ls research_output/
         \`\`\`
         
         ---

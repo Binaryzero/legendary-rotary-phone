@@ -11,7 +11,6 @@ class DataLayer(Enum):
     FOUNDATIONAL = auto()
     EXPLOIT_MECHANICS = auto()
     WEAKNESS_TACTICS = auto()
-    THREAT_CONTEXT = auto()
     RAW_INTELLIGENCE = auto()
 
 
@@ -140,10 +139,8 @@ class ResearchData:
     # Layer 3: Weakness & Tactics
     weakness: WeaknessTactics = field(default_factory=WeaknessTactics)
     
-    # Layer 4: Threat Context
+    # Layer 4: Raw Intelligence (includes threat context)
     threat: ThreatContext = field(default_factory=ThreatContext)
-    
-    # Layer 5: Raw Intelligence
     cpe_affected: List[str] = field(default_factory=list)
     vendor_advisories: List[str] = field(default_factory=list)
     patches: List[str] = field(default_factory=list)

@@ -168,7 +168,7 @@ def main_research(input_file: str = 'cves.txt', output_dir: str = 'research_outp
     # Export in all formats automatically
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Always generate JSON (for Web UI and programmatic access)
+    # Always generate JSON (for programmatic access and analysis)
     json_filename = f"research_report_{timestamp}.json"
     report_gen.export_research_data(
         research_results,
@@ -196,7 +196,7 @@ def main_research(input_file: str = 'cves.txt', output_dir: str = 'research_outp
     console.print(f"  - JSON: {output_path / json_filename}")
     console.print(f"  - CSV: {output_path / csv_filename}")
     console.print(f"  - Excel: {output_path / excel_filename}")
-    console.print(f"\n[cyan]Start the Web UI with: python start_odin_ui.py --data-file {output_path / json_filename}[/cyan]")
+    console.print(f"\n[cyan]JSON file ready for external visualization tools: {output_path / json_filename}[/cyan]")
     
     # The --detailed flag is now deprecated since we always generate all formats
     if detailed:

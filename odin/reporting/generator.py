@@ -284,7 +284,7 @@ class ResearchReportGenerator:
         """Export research data in specified format.
         
         Supported formats:
-        - json: Comprehensive data export for programmatic use and web UI
+        - json: Comprehensive data export for programmatic use and analysis
         - csv: Tabular format for spreadsheet analysis  
         - excel: Excel format with all fields (same structure as CSV)
         - markdown: Detailed markdown reports (deprecated - will be removed)

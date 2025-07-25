@@ -4,18 +4,20 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Optional imports with fallbacks
 try:
     import aiohttp
     from aiohttp import ClientError, ContentTypeError
     AIOHTTP_AVAILABLE = True
+    ClientSessionType = aiohttp.ClientSession
 except ImportError:
     aiohttp = None  # type: ignore
     ClientError = Exception  # type: ignore
     ContentTypeError = Exception  # type: ignore
     AIOHTTP_AVAILABLE = False
+    ClientSessionType = None  # type: ignore
 
 try:
     from rich.console import Console as RichConsole
@@ -49,7 +51,6 @@ from ..connectors import (
     CVEProjectConnector,
     TrickestConnector,
     MITREConnector,
-    ThreatContextConnector,
     CVSSBTConnector,
     PatrowlConnector
 )
@@ -72,19 +73,17 @@ class VulnerabilityResearchEngine:
             DataLayer.FOUNDATIONAL: CVEProjectConnector(),           # Layer 1: CVEProject/cvelistV5
             DataLayer.EXPLOIT_MECHANICS: TrickestConnector(),        # Layer 2: trickest/cve
             DataLayer.WEAKNESS_TACTICS: MITREConnector(),            # Layer 3: mitre/cti
-            DataLayer.THREAT_CONTEXT: ThreatContextConnector(),      # Layer 4: t0sche/cvss-bt, ARPSyndicate/cve-scores
-            DataLayer.RAW_INTELLIGENCE: PatrowlConnector()           # Layer 5: Patrowl/PatrowlHearsData
+            DataLayer.RAW_INTELLIGENCE: PatrowlConnector()           # Layer 4: Patrowl/PatrowlHearsData
         }
         
         # Initialize control mapper for NIST 800-53 mappings
         self.control_mapper = ControlMapper()
         
-        # Additional Layer 4 connector for CVSS-BT data
+        # CVSS-BT connector integrated into RAW_INTELLIGENCE layer
         self.cvss_bt_connector = CVSSBTConnector()
         
         # Set session cache for connectors that support it
-        for connector in [self.connectors[DataLayer.THREAT_CONTEXT], 
-                         self.connectors[DataLayer.WEAKNESS_TACTICS], 
+        for connector in [self.connectors[DataLayer.WEAKNESS_TACTICS], 
                          self.cvss_bt_connector]:
             if hasattr(connector, 'set_session_cache'):
                 connector.set_session_cache(self.session_cache)
@@ -98,9 +97,9 @@ class VulnerabilityResearchEngine:
             self.session_cache.session_stats["cache_hits"] += 1
             self.session_cache.session_stats["duplicate_cves"] += 1
             logger.debug(f"Using cached data for duplicate CVE: {cve_id}")
-            # Build from cached data
+            # Build from cached data (no session needed for cached data)
             cached_results = self.session_cache.cve_data[cve_id]
-            return self._build_research_data(cve_id, cached_results)
+            return await self._build_research_data(cve_id, cached_results, None)
         
         # Fetch from all sources concurrently
         if not AIOHTTP_AVAILABLE:
@@ -115,7 +114,7 @@ class VulnerabilityResearchEngine:
                 task = connector.fetch(cve_id, session)
                 tasks.append((layer, task))
             
-            # Add CVSS-BT as additional Layer 4 (Real-World Context) source
+            # Add CVSS-BT as additional RAW_INTELLIGENCE source
             cvss_bt_task = self.cvss_bt_connector.fetch(cve_id, session)
             tasks.append(("cvss_bt", cvss_bt_task))
             
@@ -126,24 +125,24 @@ class VulnerabilityResearchEngine:
             for layer, task in tasks:
                 try:
                     data = await task
-                    if isinstance(layer, str) and layer == "cvss_bt":
-                        parsed = self.cvss_bt_connector.parse(cve_id, data)
-                        # Merge CVSS-BT data into THREAT_CONTEXT (Layer 4)
-                        if DataLayer.THREAT_CONTEXT not in results:
-                            results[DataLayer.THREAT_CONTEXT] = {}
-                        if "cvss_bt" not in results[DataLayer.THREAT_CONTEXT]:
-                            results[DataLayer.THREAT_CONTEXT]["cvss_bt"] = {}
-                        results[DataLayer.THREAT_CONTEXT]["cvss_bt"].update(parsed)
-                    elif isinstance(layer, DataLayer):
+                    if isinstance(layer, DataLayer):
                         # Special handling for MITRE connector to pass foundational CWE data
                         if layer == DataLayer.WEAKNESS_TACTICS:
                             foundational_data = results.get(DataLayer.FOUNDATIONAL, {})
                             cwe_ids = foundational_data.get("cwe_ids", [])
                             data["foundational_cwe"] = cwe_ids
                             logger.debug(f"Passing {len(cwe_ids)} CWE IDs to MITRE connector for {cve_id}")
-                        
-                        parsed = self.connectors[layer].parse(cve_id, data)
-                        results[layer] = parsed
+                            parsed = self.connectors[layer].parse(cve_id, data)
+                            results[layer] = parsed
+                        else:
+                            parsed = self.connectors[layer].parse(cve_id, data)
+                            results[layer] = parsed
+                    elif layer == "cvss_bt":
+                        # Integrate CVSS-BT data into RAW_INTELLIGENCE layer
+                        parsed = self.cvss_bt_connector.parse(cve_id, data)
+                        if DataLayer.RAW_INTELLIGENCE not in results:
+                            results[DataLayer.RAW_INTELLIGENCE] = {}
+                        results[DataLayer.RAW_INTELLIGENCE]["cvss_bt"] = parsed
                     
                     # Track source availability
                     if data:
@@ -163,9 +162,9 @@ class VulnerabilityResearchEngine:
                     else:
                         logger.warning(f"Error fetching {layer_name} data for {cve_id}: {type(e).__name__}: {e}")
                     if isinstance(layer, str) and layer == "cvss_bt":
-                        if DataLayer.THREAT_CONTEXT not in results:
-                            results[DataLayer.THREAT_CONTEXT] = {}
-                        results[DataLayer.THREAT_CONTEXT].update({"cvss_bt": {}})
+                        if DataLayer.RAW_INTELLIGENCE not in results:
+                            results[DataLayer.RAW_INTELLIGENCE] = {}
+                        results[DataLayer.RAW_INTELLIGENCE].update({"cvss_bt": {}})
                     elif isinstance(layer, DataLayer):
                         results[layer] = {}
                     source_status[layer] = "error"
@@ -174,9 +173,9 @@ class VulnerabilityResearchEngine:
             successful_sources = sum(1 for status in source_status.values() if status == "success")
             total_sources = len(self.connectors) + 1  # +1 for CVSS-BT
             logger.debug(f"CVE {cve_id}: {successful_sources}/{total_sources} data sources available")
-        
-        # Build ResearchData object
-        research_data = self._build_research_data(cve_id, results)
+            
+            # Build ResearchData object (inside session context)
+            research_data = await self._build_research_data(cve_id, results, session)
         
         # Store results in session cache for potential duplicate lookups
         self.session_cache.cve_data[cve_id] = results
@@ -188,28 +187,27 @@ class VulnerabilityResearchEngine:
         
         return research_data
     
-    def _build_research_data(self, cve_id: str, results: Dict[DataLayer, Dict[str, Any]]) -> ResearchData:
+    async def _build_research_data(self, cve_id: str, results: Dict[DataLayer, Dict[str, Any]], session: Optional[ClientSessionType]) -> ResearchData:
         """Build ResearchData from multi-source results with graceful fallbacks."""
         # Start with foundational data
         foundational = results.get(DataLayer.FOUNDATIONAL, {})
         raw_intelligence = results.get(DataLayer.RAW_INTELLIGENCE, {})
-        threat_context = results.get(DataLayer.THREAT_CONTEXT, {})
         
-        # Use CVSS score with priority: Foundational > Patrowl (Layer 5) > CVSS-BT (Layer 4)
+        # Use CVSS score with priority: Foundational > Patrowl (Layer 4) > CVSS-BT
         cvss_score = foundational.get("cvss_score", 0.0)
         cvss_vector = foundational.get("cvss_vector", "")
         cvss_source = "CVEProject"
         
-        # Fallback to Patrowl (Layer 5 - Raw Intelligence) if foundational has no CVSS
+        # Fallback to Patrowl (Layer 4 - Raw Intelligence) if foundational has no CVSS
         if cvss_score == 0.0 and raw_intelligence.get("cvss_score", 0.0) > 0.0:
             cvss_score = raw_intelligence.get("cvss_score", 0.0)
             cvss_vector = raw_intelligence.get("cvss_vector", "")
             cvss_source = "Patrowl"
             logger.debug(f"Using CVSS {cvss_score} from Patrowl for {cve_id}")
         
-        # Final fallback to CVSS-BT (Layer 4 - Real-World Context) if still no score
+        # Final fallback to CVSS-BT if still no score
         elif cvss_score == 0.0:
-            cvss_bt_data = threat_context.get("cvss_bt", {})
+            cvss_bt_data = raw_intelligence.get("cvss_bt", {})
             if cvss_bt_data.get("cvss_score", 0.0) > 0.0:
                 cvss_score = cvss_bt_data.get("cvss_score", 0.0)
                 cvss_vector = cvss_bt_data.get("cvss_vector", "")
@@ -249,7 +247,7 @@ class VulnerabilityResearchEngine:
         
         # Extract CVSS version and CVSS-BT data
         cvss_version = foundational.get("cvss_version", "")
-        cvss_bt_data = threat_context.get("cvss_bt", {})
+        cvss_bt_data = raw_intelligence.get("cvss_bt", {})
         cvss_bt_score = cvss_bt_data.get("cvss_bt_score", 0.0)
         cvss_bt_severity = cvss_bt_data.get("cvss_bt_severity", "")
 
@@ -303,7 +301,7 @@ class VulnerabilityResearchEngine:
             
             # Note: Control mappings are populated later from ATT&CK techniques in NIST mapper (lines 430-439)
         
-        # Add enhanced data from Patrowl (Layer 5 - Raw Intelligence) as fallback
+        # Add enhanced data from Patrowl (Layer 4 - Raw Intelligence) as fallback
         if raw_intelligence and not research_data.cpe_affected:
             # Use Patrowl CPE only if CVE Project didn't provide any
             patrowl_cpe = raw_intelligence.get("cpe_affected", [])
@@ -340,12 +338,10 @@ class VulnerabilityResearchEngine:
         else:
             research_data.exploit_maturity = "unproven"
         
-        # Add threat context with fallbacks from multiple Layer 4 sources
-        epss_threat_data = threat_context.get("threat", {})  # From ThreatContextConnector (EPSS)
-        cvss_bt_threat_data = threat_context.get("cvss_bt", {}).get("threat", {})  # From CVSS-BT
+        # Add threat context from CVSS-BT data in raw intelligence layer
+        cvss_bt_threat_data = raw_intelligence.get("cvss_bt", {}).get("threat", {})  # From CVSS-BT
         
-        # Use threat data from Layer 4 sources (Real-World Context)
-        # ThreatContextConnector now returns empty data after ARPSyndicate removal
+        # Use threat data from CVSS-BT connector
         research_data.threat.in_kev = cvss_bt_threat_data.get("in_kev", False)
         research_data.threat.epss_score = cvss_bt_threat_data.get("epss_score")
         research_data.threat.actively_exploited = cvss_bt_threat_data.get("in_kev", False)
@@ -411,7 +407,7 @@ class VulnerabilityResearchEngine:
             sources_used.append("CVEProject")
         if raw_intelligence:
             sources_used.append("Patrowl")
-        if threat_context.get("cvss_bt"):
+        if raw_intelligence.get("cvss_bt"):
             sources_used.append("CVSS-BT")
         if results.get(DataLayer.EXPLOIT_MECHANICS):
             sources_used.append("Trickest")
@@ -419,8 +415,14 @@ class VulnerabilityResearchEngine:
         logger.debug(f"Data sources used for {cve_id}: {', '.join(sources_used)} (CVSS from {cvss_source}, EPSS from CVSS-BT)")
         
         # Add NIST 800-53 control mappings based on ATT&CK techniques
-        if research_data.weakness.attack_techniques:
-            control_mappings = self.control_mapper.get_controls_for_techniques(research_data.weakness.attack_techniques)
+        if research_data.weakness.attack_techniques and AIOHTTP_AVAILABLE and aiohttp:
+            # Ensure we have a session for control mapping, create one if needed
+            if session is not None:
+                control_mappings = await self.control_mapper.get_controls_for_techniques(research_data.weakness.attack_techniques, session)
+            else:
+                # Create a temporary session for control mapping when using cached data
+                async with aiohttp.ClientSession() as temp_session:
+                    control_mappings = await self.control_mapper.get_controls_for_techniques(research_data.weakness.attack_techniques, temp_session)
             
             # Store control data in structured control mappings field
             research_data.control_mappings.applicable_controls_count = control_mappings['applicable_controls_count']

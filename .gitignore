@@ -150,6 +150,6 @@ bandit-report.json
 *.tmp
 *.temp
 archive/*
-frontend/node_modules/*
+# Removed: frontend/node_modules/* (frontend removed)
 .claude/*
-.claude/settings.local.json
+.kiro/*

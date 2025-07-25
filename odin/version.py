@@ -5,14 +5,14 @@ Version is automatically updated with each PR merge.
 """
 
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 # Core version information
-__version__ = "1.0.3"
-__build__ = "20250618.3"  # YYYYMMDD.build_number
+__version__ = "1.1.0"
+__build__ = "20250725.1"  # YYYYMMDD.build_number - should match release_date
 __git_commit__ = "ce3b98d589dd6a6934c0f5a8344896d0844aa995"  # Updated by CI/CD
-__release_date__ = "2025-06-18"
-__release_name__ = "Foundation"
+__release_date__ = "2025-07-25"
+__release_name__ = "Cambert"
 
 # Feature compatibility information
 DATA_MODEL_VERSION = "1.0"  # Changes when data models are modified
@@ -21,12 +21,17 @@ EXPORT_FORMAT_VERSION = "1.0"  # Changes when export formats change
 
 # Component versions (for compatibility checking)
 ENHANCED_FIELDS_VERSION = "1.0"  # Phase 1 enhanced fields
-UI_ARCHITECTURE_VERSION = "2.0"  # After modular refactor
+UI_ARCHITECTURE_VERSION = "2.0"  # Legacy: After modular refactor (CLI-only now)
 CONNECTOR_SYSTEM_VERSION = "1.0"  # Modular connector architecture
 
-def get_version_info() -> Dict[str, Any]:
-    """Get comprehensive version information."""
-    return {
+def get_version_info(include_runtime_timestamp: bool = False) -> Dict[str, Any]:
+    """Get comprehensive version information.
+    
+    Args:
+        include_runtime_timestamp: If True, includes current timestamp. 
+                                 If False, uses build date for consistency.
+    """
+    version_info = {
         "version": __version__,
         "build": __build__,
         "git_commit": __git_commit__,
@@ -38,8 +43,14 @@ def get_version_info() -> Dict[str, Any]:
         "enhanced_fields_version": ENHANCED_FIELDS_VERSION,
         "ui_architecture_version": UI_ARCHITECTURE_VERSION,
         "connector_system_version": CONNECTOR_SYSTEM_VERSION,
-        "build_timestamp": datetime.now().isoformat()
     }
+    
+    if include_runtime_timestamp:
+        version_info["runtime_timestamp"] = datetime.now().isoformat()
+    else:
+        version_info["build_timestamp"] = f"{__release_date__}T00:00:00"
+    
+    return version_info
 
 def get_version_string() -> str:
     """Get a formatted version string for display."""
@@ -51,13 +62,39 @@ def check_compatibility(required_version: str) -> bool:
         from packaging import version
         return version.parse(__version__) >= version.parse(required_version)
     except ImportError:
-        # Fallback to string comparison if packaging not available
-        return __version__ >= required_version
+        # Fallback to basic semantic version comparison
+        import warnings
+        warnings.warn(
+            "packaging library not available, using basic version comparison. "
+            "Install 'packaging' for accurate semantic version checking.",
+            UserWarning
+        )
+        
+        def parse_version(v: str) -> tuple:
+            """Basic semantic version parsing."""
+            try:
+                parts = v.split('.')
+                return tuple(int(part) for part in parts[:3])  # major.minor.patch
+            except (ValueError, IndexError):
+                return (0, 0, 0)
+        
+        current = parse_version(__version__)
+        required = parse_version(required_version)
+        return current >= required
 
 # Version history for reference
-VERSION_HISTORY = [
-    
-    
+VERSION_HISTORY: List[Dict[str, Any]] = [
+    {
+        "version": "1.1.0",
+        "build": "20250725.1",
+        "date": "2025-07-25",
+        "name": "Cambert",
+        "changes": [
+            "Documentation cleanup and project structure improvements",
+            "Version management consistency fixes",
+            "Enhanced CLI architecture documentation"
+        ]
+    },
     {
         "version": "1.0.3",
         "build": "20250618.3",

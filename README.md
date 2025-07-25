@@ -1,133 +1,150 @@
 # ODIN (OSINT Data Intelligence Nexus)
 
-**ODIN v1.0.2** - A comprehensive vulnerability intelligence aggregation platform that collects and structures vulnerability data from multiple authoritative OSINT sources. ODIN focuses on data collection and aggregation, not prioritization or risk scoring, enabling researchers to make informed decisions with complete intelligence context.
+ODIN is a comprehensive vulnerability intelligence aggregation platform that collects and structures vulnerability data from multiple authoritative OSINT sources.
 
-##  What ODIN Does
+## Core Philosophy
 
-ODIN aggregates vulnerability intelligence from **5 authoritative data layers** and presents it through multiple interfaces:
-
-- **80+ structured data fields** extracted from verified sources
-- **Professional web interface** with advanced filtering and search
-- **Command-line toolkit** for automated research workflows  
-- **Multiple export formats** (JSON, CSV, Excel, WebUI) for analysis
-- **Enterprise-grade version management** with automated releases
-
-### Core Philosophy
 ODIN is a **data collector and aggregator**, not a decision maker. It provides comprehensive, traceable intelligence so humans can make informed security decisions.
 
-##  Architecture Overview
+## Key Features
 
-### **CLI-Centric File-Based Architecture**
+- **80+ structured data fields** extracted from verified sources
+- **4-layer data architecture** from authoritative sources
+- **CLI-centric file-based architecture** for security and simplicity
+- **Multiple export formats** (JSON, CSV, Excel) generated automatically
+- **Multiple output formats** for analysis and visualization
+- **Enterprise-grade version management** with automated releases
 
-ODIN uses a simplified, secure architecture where the CLI tool generates all intelligence files and the Web UI provides optional visualization:
+## Data Sources (4 Layers)
+
+1. **Foundational Record**: CVEProject/cvelistV5 (canonical CVE data)
+2. **Exploit Mechanics**: trickest/cve (proof-of-concept exploits)
+3. **Weakness Classification**: mitre/cti (ATT&CK techniques, CAPEC patterns)
+4. **Raw Intelligence**: Patrowl/PatrowlHearsData + t0sche/cvss-bt (additional feeds, threat context, CISA KEV, EPSS, temporal CVSS)
+
+## Architecture
 
 ```
-CLI Tool → ODIN Engine → Generate All Files → Web UI Loads JSON
+CLI Tool → ODIN Engine → Generate Output Files (JSON, CSV, Excel)
 ```
 
-**Benefits:**
-- **Security**: No API = No API vulnerabilities
-- **Simplicity**: Single CLI generates everything, Web UI for visualization
-- **User Experience**: All formats created automatically (JSON, CSV, Excel)
-
-### **5-Layer Data Architecture**
-
-| Layer | Source | Intelligence Provided |
-|-------|--------|----------------------|
-| **1. Foundational Record** | CVEProject/cvelistV5 | Canonical CVE data, CVSS metrics, official references |
-| **2. Exploit Mechanics** | trickest/cve | Proof-of-concept exploits, exploit maturity assessment |
-| **3. Weakness Classification** | mitre/cti | ATT&CK techniques, CAPEC patterns, enhanced descriptions |
-| **4. Threat Context** | t0sche/cvss-bt | CISA KEV, temporal CVSS, exploitation indicators |
-| **5. Raw Intelligence** | Patrowl/PatrowlHearsData | Additional feeds and validation data |
-
-### **Current Capabilities (80 Fields)**
-- **Enhanced CVE Intelligence**: CVSS version, alternative scores, reference categorization
-- **Product Intelligence**: Vendor/product/version/platform extraction  
-- **Enhanced Problem Classification**: Structured weakness analysis beyond CWE
-- **MITRE Enhancement**: Human-readable technique/tactic/CAPEC descriptions
-- **Exploit Intelligence**: Verification status, enhanced titles, reliability assessment
-- **Control Mappings**: NIST 800-53 control relationships
-
-##  Quick Start
+## Quick Start
 
 ### Prerequisites
-- Python 3.8+
-- Node.js 16+ and npm (for web interface)
-- Internet connection for vulnerability data sources
+
+- Python 3.8 or higher
+- pip package manager
 
 ### Installation
 
+1. Clone the repository:
 ```bash
-# Clone repository
-git clone https://github.com/Binaryzero/legendary-rotary-phone.git
-cd legendary-rotary-phone
+git clone <repository-url>
+cd odin
+```
+
+2. Install dependencies:
+```bash
+# Activate virtual environment (if available)
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
-cd frontend && npm install && cd ..
 ```
 
 ### Basic Usage
 
-#### Command-Line Interface (Primary)
+1. Create a file with CVE IDs (one per line):
 ```bash
-# Simple research - generates all formats automatically
 echo "CVE-2021-44228" > cves.txt
+echo "CVE-2023-23397" >> cves.txt
+```
+
+2. Run ODIN research:
+```bash
+# Make sure virtual environment is activated
+source .venv/bin/activate
+
+# Run research
 python odin_cli.py cves.txt
-# Creates: JSON (for Web UI), CSV (for Excel), Excel (structured)
+```
 
-# Batch research - multiple CVEs
-python odin_cli.py my_cve_list.txt
+3. View results in the `research_output/` directory:
+   - `research_report_YYYYMMDD_HHMMSS.json` - Structured data for analysis
+   - `research_report_YYYYMMDD_HHMMSS.csv` - Excel-compatible format
+   - `research_report_YYYYMMDD_HHMMSS.xlsx` - Formatted spreadsheet
 
-# Get version information
+### Advanced Usage
+
+```bash
+# Specify custom output directory
+python odin_cli.py cves.txt --output-dir /path/to/output
+
+# Enable detailed logging
+python odin_cli.py cves.txt --detailed
+
+# Show version information
 python odin_cli.py --version
+
+# Get help
+python odin_cli.py --help
 ```
 
-#### Web Interface (Visualization)
+**Note**: Make sure to activate the virtual environment first:
 ```bash
-# Start web interface (no backend needed)
-python start_odin_ui.py
-
-# Use interface to research CVEs or load existing JSON files
-# Interface calls CLI automatically and displays results
+source .venv/bin/activate
 ```
 
-The web interface will be available at `http://localhost:3000` and provides visualization of CLI-generated data.
+### Alternative Entry Points
 
-##  Export Formats
-
-ODIN automatically generates all formats with each research operation:
-
-### Automatic Generation
 ```bash
-python odin_cli.py cves.txt
-# Creates all formats automatically:
+# Run as Python module
+python -m odin cves.txt
+
+# Import in Python code
+from odin import VulnerabilityResearchEngine
 ```
 
-### JSON Export (Web UI + Programmatic)
-- All 80+ fields with structured data
-- Version metadata for traceability
-- Nested objects for complex intelligence
-- Loaded automatically by Web UI
+## Output Formats
 
-### CSV Export (Excel Analysis)
-- Flattened structure for spreadsheet analysis
-- All fields with proper sanitization
-- Excel-compatible formatting
-- Perfect for data analysis workflows
+### JSON Export
+Comprehensive structured data with all 80+ fields for programmatic analysis.
 
-### Excel Export (Structured Spreadsheets)
-- Professional Excel format
-- Structured data organization
-- Formatted for business reporting
+### CSV Export
+Excel-compatible format optimized for analysis and reporting.
 
-##  Development
+### Excel Export
+Multi-sheet workbook with structured data organization and formatting.
 
-### Running Tests
+## Data Fields
+
+ODIN extracts 80+ structured data fields including:
+
+- **Core CVE Data**: ID, description, severity scores, publication dates
+- **Exploit Intelligence**: PoC availability, exploit types, GitHub repositories
+- **Weakness Classification**: CWE mappings, MITRE ATT&CK techniques, CAPEC patterns
+- **Threat Context**: CISA KEV status, EPSS scores, temporal CVSS metrics
+- **Reference Analysis**: Vendor advisories, patches, technical details
+- **Enhanced Metadata**: Problem types, impact analysis, affected systems
+
+## Development
+
+### Setup Development Environment
+
 ```bash
-# Install test dependencies
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install development dependencies
 pip install -r requirements.txt
 
+# Install pre-commit hooks
+pre-commit install
+```
+
+### Testing
+
+```bash
 # Run test suite
 python -m pytest tests/ -v
 
@@ -135,127 +152,87 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=odin --cov-report=html
 ```
 
-### Code Quality Tools
+### Quality Checks
+
 ```bash
-# Type checking
-python scripts/type-check.sh
+# Complete quality check
+bash scripts/quality-check.sh
 
-# Quality checks
-python scripts/quality-check.sh
+# Type checking only
+bash scripts/type-check.sh
 
+# Format code
+black --line-length=88 .
+isort --profile=black .
+```
+
+### Version Management
+
+```bash
 # Manual version bump
-python scripts/bump-version.py patch
+python scripts/bump-version.py patch|minor|major
 ```
 
-### Project Structure
+## Project Structure
+
 ```
-odin/                   # Core package
-├── core/               # Research engine
-├── connectors/         # Data source connectors  
-├── models/            # Data models and schemas
-├── reporting/         # Export generation
-└── utils/            # Utilities and helpers
-
-odin_cli.py            # Primary CLI interface
-frontend/             # React TypeScript UI (visualization)
-tests/                # Test suite
-scripts/              # Development tools
-docs/                 # Documentation
+├── odin/                   # Core Python package
+│   ├── cli.py             # Command-line interface
+│   ├── core/              # Research engine
+│   ├── connectors/        # Data source connectors
+│   ├── models/            # Data models and schemas
+│   ├── reporting/         # Export generation
+│   └── utils/             # Utilities and helpers
+├── tests/                 # Test suite
+├── scripts/               # Development and automation scripts
+├── research_output/       # Generated research reports
+├── odin_cli.py           # Primary CLI entry point
+└── requirements.txt      # Python dependencies
 ```
 
-##  Version Management
+## Technology Stack
 
-ODIN uses **enterprise-grade version management** with automatic releases:
+### Core Technologies
+- **Python 3.8+**: Main language for CLI and data processing
 
-- **Semantic Versioning**: major.minor.patch format
-- **Automatic Updates**: PR merges trigger version bumps based on labels
-- **GitHub Releases**: Automated release creation with download packages
-- **Version Tracking**: All exports include version metadata
+### Key Dependencies
+- **aiohttp**: Async HTTP client for data source connectors
+- **pandas**: Data manipulation and CSV export
+- **click**: CLI framework
+- **rich**: Enhanced console output and logging
+- **openpyxl**: Excel file generation
+- **pytest**: Testing framework with async support
 
-### Current Version: v1.0.2
-- **Build**: 20250618.2
-- **Release Date**: 2025-06-18  
-- **Data Model**: v1.0
-- **Enhanced Fields**: v1.0
+## Architecture Patterns
 
-##  Security Considerations
+- **Modular connector system**: Each data source has its own connector
+- **Async/await**: All data fetching is asynchronous
+- **Session caching**: Prevents redundant API calls during batch processing
+- **Graceful degradation**: Continues with partial data when sources unavailable
+- **File-based architecture**: CLI generates multiple output formats (JSON, CSV, Excel)
 
-** IMPORTANT**: ODIN is currently in development with **known security limitations**:
+## What ODIN IS NOT
 
-- No authentication or authorization implemented
-- Input validation needs enhancement  
-- Not recommended for production deployment without security hardening
-- See [SECURITY.md](SECURITY.md) for current security status
-
-##  Data Sources
-
-### Authoritative Sources
-| Repository | Layer | Purpose | Update Frequency |
-|------------|-------|---------|------------------|
-| **CVEProject/cvelistV5** | Foundation | Official CVE records | Daily |
-| **trickest/cve** | Exploit | Proof-of-concept exploits | Continuous |
-| **mitre/cti** | Classification | ATT&CK/CAPEC knowledge | Weekly |
-| **t0sche/cvss-bt** | Threat Context | CISA KEV, temporal metrics | Daily |
-| **Patrowl/PatrowlHearsData** | Intelligence | Additional feeds | Varies |
-
-### Data Quality Standards
-- **Institutional Sources Preferred**: Authoritative, maintained sources
-- **Graceful Degradation**: Continues with partial data when sources unavailable
-- **Session Caching**: Prevents redundant API calls during batch processing
-- **Error Handling**: Comprehensive logging and fallback mechanisms
-
-##  Contributing
-
-We welcome contributions! Please see our development guidelines:
-
-1. **Evidence-Based Development**: Verify data source capabilities before implementation
-2. **Quality Over Quantity**: Prefer reliable fields over speculative features  
-3. **User-Centric Design**: Focus on practical vulnerability research workflows
-4. **Security First**: Consider security implications in all contributions
-
-### Development Process
-1. Fork the repository
-2. Create feature branch with descriptive name
-3. Add tests for new functionality
-4. Run quality checks and tests
-5. Submit PR with appropriate labels (major/minor/patch)
-6. Version management handles automatic updates
-
-##  License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-##  Support
-
-- **Issues**: Report bugs and feature requests on [GitHub Issues](https://github.com/Binaryzero/legendary-rotary-phone/issues)
-- **Documentation**: See [docs/](docs/) directory for detailed documentation
-- **API Reference**: Available at `/docs` endpoint when backend is running
-
-##  Philosophy: Data Collection, Not Decision Making
-
-ODIN embodies the principle that **comprehensive data enables better human decisions**. Rather than algorithmic black boxes that make prioritization decisions, ODIN provides transparent, traceable intelligence that security professionals can validate and reason about.
-
-**What ODIN IS:**
-- Comprehensive vulnerability intelligence aggregator
-- Multi-source data collector with structured output
-- Research tool for security professionals
-- Foundation for informed human decision-making
-
-**What ODIN IS NOT:**
 - Vulnerability scanner or discovery tool
-- Risk scoring or prioritization engine  
+- Risk scoring or prioritization engine
 - Real-time threat monitoring system
 - Decision-making or recommendation system
 
----
+## Contributing
 
-##  Current Status
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run quality checks: `bash scripts/quality-check.sh`
+5. Submit a pull request
 
-**Core Functionality**:  Complete - All enhanced fields operational  
-**Export System**:  JSON/WebUI working, CSV functional
-**Version Management**:  Complete - Automatic updates operational  
-**Release Automation**:  Complete - GitHub releases working
-**Security Status**:  Development - Security hardening in progress
-**Field Coverage**: **80 fields** from 5 authoritative sources
+## License
 
-**ODIN provides the intelligence. You make the decisions.**
+See [LICENSE](LICENSE) file for details.
+
+## Version
+
+Current version: **1.0.3** (Foundation)
+Build: 20250618.3
+
+For version history and compatibility information, see `odin/version.py`.

@@ -1,12 +1,12 @@
 """ODIN (OSINT Data Intelligence Nexus) - Multi-Source Vulnerability Intelligence Platform
 
 Integrates multiple FOSS vulnerability data sources to provide comprehensive
-research intelligence across five layers:
+research intelligence across four layers:
 1. Foundational Record (CVEProject/cvelistV5)
 2. Exploit Mechanics (trickest/cve)
 3. Weakness & Tactics (mitre/cti)
-4. Real-World Context (t0sche/cvss-bt, ARPSyndicate/cve-scores)
-5. Raw Intelligence (Patrowl/PatrowlHearsData)
+4. Raw Intelligence (Patrowl/PatrowlHearsData + t0sche/cvss-bt)
+
 """
 
 # Import version information from central version module

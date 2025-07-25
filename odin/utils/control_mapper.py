@@ -3,8 +3,19 @@
 
 import csv
 import logging
-import urllib.request
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+try:
+    import aiohttp
+    from aiohttp import ClientError, ContentTypeError
+    AIOHTTP_AVAILABLE = True
+    ClientSessionType = aiohttp.ClientSession
+except ImportError:
+    aiohttp = None  # type: ignore
+    ClientError = Exception  # type: ignore
+    ContentTypeError = Exception  # type: ignore
+    AIOHTTP_AVAILABLE = False
+    ClientSessionType = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -15,51 +26,78 @@ class ControlMapper:
     def __init__(self):
         self.mappings: Dict[str, List[Dict[str, str]]] = {}
         self.control_families: Dict[str, str] = {}
-        self._load_mappings()
+        self._mappings_loaded = False
     
-    def _load_mappings(self):
+    async def _load_mappings(self, session: Optional[ClientSessionType] = None):
         """Load ATT&CK to NIST 800-53 mappings from official MITRE data."""
+        if self._mappings_loaded:
+            return
+            
+        if not AIOHTTP_AVAILABLE:
+            logger.error("aiohttp is required for control mapping. Install with: pip install aiohttp")
+            self.mappings = {}
+            self.control_families = {}
+            return
+            
         try:
             logger.debug("Loading ATT&CK to NIST 800-53 mappings...")
             
             # Download official MITRE mappings
             url = "https://center-for-threat-informed-defense.github.io/mappings-explorer/data/nist_800_53/attack-16.1/nist_800_53-rev5/enterprise/nist_800_53-rev5_attack-16.1-enterprise.csv"
             
-            with urllib.request.urlopen(url) as response:
-                content = response.read().decode('utf-8')
-                reader = csv.DictReader(content.splitlines())
-                
-                for row in reader:
-                    # Only process actual mitigation mappings (not non_mappable)
-                    if row.get('mapping_type') == 'mitigates' and row.get('capability_id'):
-                        attack_id = row.get('attack_object_id', '')
-                        
-                        if attack_id not in self.mappings:
-                            self.mappings[attack_id] = []
-                        
-                        control_mapping = {
-                            'control_id': row.get('capability_id', ''),
-                            'control_family': row.get('capability_group', ''),
-                            'control_description': row.get('capability_description', ''),
-                            'comments': row.get('comments', '')
-                        }
-                        
-                        self.mappings[attack_id].append(control_mapping)
-                        
-                        # Track control families
-                        if control_mapping['control_family']:
-                            self.control_families[control_mapping['control_id']] = control_mapping['control_family']
+            # Use provided session or create a new one
+            if session:
+                async with session.get(url) as response:
+                    response.raise_for_status()
+                    content = await response.text()
+            else:
+                async with aiohttp.ClientSession() as new_session:
+                    async with new_session.get(url) as response:
+                        response.raise_for_status()
+                        content = await response.text()
             
+            reader = csv.DictReader(content.splitlines())
+            
+            for row in reader:
+                # Only process actual mitigation mappings (not non_mappable)
+                if row.get('mapping_type') == 'mitigates' and row.get('capability_id'):
+                    attack_id = row.get('attack_object_id', '')
+                    
+                    if attack_id not in self.mappings:
+                        self.mappings[attack_id] = []
+                    
+                    control_mapping = {
+                        'control_id': row.get('capability_id', ''),
+                        'control_family': row.get('capability_group', ''),
+                        'control_description': row.get('capability_description', ''),
+                        'comments': row.get('comments', '')
+                    }
+                    
+                    self.mappings[attack_id].append(control_mapping)
+                    
+                    # Track control families
+                    if control_mapping['control_family']:
+                        self.control_families[control_mapping['control_id']] = control_mapping['control_family']
+        
             logger.debug(f"Loaded {len(self.mappings)} ATT&CK technique mappings to NIST controls")
+            self._mappings_loaded = True
             
+        except (ClientError, ContentTypeError) as e:
+            logger.warning(f"HTTP error loading control mappings: {e}")
+            # Fallback to empty mappings
+            self.mappings = {}
+            self.control_families = {}
         except Exception as e:
             logger.warning(f"Failed to load control mappings: {e}")
             # Fallback to empty mappings
             self.mappings = {}
             self.control_families = {}
     
-    def get_controls_for_techniques(self, attack_techniques: List[str]) -> Dict[str, Any]:
+    async def get_controls_for_techniques(self, attack_techniques: List[str], session: Optional[ClientSessionType] = None) -> Dict[str, Any]:
         """Get NIST controls for given ATT&CK techniques."""
+        # Ensure mappings are loaded
+        await self._load_mappings(session)
+        
         if not attack_techniques:
             return {
                 'applicable_controls_count': 0,

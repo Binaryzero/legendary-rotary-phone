@@ -51,10 +51,10 @@ def test_engine_creation():
         assert False, f"Engine creation failed: {e}"
 
 
-def test_start_odin_ui_exists():
-    """Test that start_odin_ui.py exists and is executable."""
+def test_odin_cli_exists():
+    """Test that odin_cli.py exists and is executable."""
     project_root = Path(__file__).parent.parent
-    ui_path = project_root / "start_odin_ui.py"
+    cli_path = project_root / "odin_cli.py"
     
-    assert ui_path.exists(), "start_odin_ui.py does not exist"
-    assert ui_path.is_file(), "start_odin_ui.py is not a file"
+    assert cli_path.exists(), "odin_cli.py does not exist"
+    assert cli_path.is_file(), "odin_cli.py is not a file"

@@ -140,13 +140,11 @@ def test_connectors() -> None:
 
     from odin.connectors.cve_project import CVEProjectConnector
     from odin.connectors.mitre import MITREConnector
-    from odin.connectors.threat_context import ThreatContextConnector
     from odin.connectors.trickest import TrickestConnector
 
     cve_connector = CVEProjectConnector()
     trickest_connector = TrickestConnector()
     mitre_connector = MITREConnector()
-    threat_connector = ThreatContextConnector()
 
     # Test parsing with sample data
     sample_cve_data = {
@@ -180,12 +178,7 @@ def test_connectors() -> None:
     parsed = mitre_connector.parse("CVE-2023-0001", {})
     assert "cwe_ids" in parsed
 
-    # ThreatContextConnector now returns empty data after ARPSyndicate removal
-    threat_data = {"in_kev": True, "epss": {"score": 0.85, "percentile": 95.0}}
-
-    parsed = threat_connector.parse("CVE-2023-0001", threat_data)
-    # Should return empty threat data as ARPSyndicate was removed
-    assert parsed.get("threat", {}) == {}
+    # ThreatContextConnector was removed as it was a placeholder returning empty data
 
     print("PASS All connector tests passed!")
 
@@ -231,7 +224,6 @@ def test_cli_integration() -> None:
     try:
         main(
             input_file=str(test_file),
-            format=["json"],
             output_dir="test_cli_output",
         )
     except Exception as e:
