@@ -19,3 +19,4 @@ aioresponses>=0.7.0
 
 # Additional utilities
 tqdm>=4.67.0
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
