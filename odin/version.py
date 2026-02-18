@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 # Core version information
-__version__ = "1.1.0"
-__build__ = "20250725.1"  # YYYYMMDD.build_number - should match release_date
-__git_commit__ = "ce3b98d589dd6a6934c0f5a8344896d0844aa995"  # Updated by CI/CD
-__release_date__ = "2025-07-25"
+__version__ = "1.1.1"
+__build__ = "20260218.1"  # YYYYMMDD.build_number - should match release_date
+__git_commit__ = "7dea8e6779c8ecededd705e953beb34bcb79ec09"  # Updated by CI/CD
+__release_date__ = "2026-02-18"
 __release_name__ = "Cambert"
 
 # Feature compatibility information
